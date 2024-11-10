@@ -1,7 +1,8 @@
 # backend/app/core/config.py
 import secrets
 from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, BaseSettings, EmailStr, validator
+from pydantic import AnyHttpUrl, EmailStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
         "http://localhost:8000",  # Backend
     ]
 
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
+    @field_validator("BACKEND_CORS_ORIGINS", mode='before')
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "secure_cms"
     SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
-    @validator("SQLALCHEMY_DATABASE_URI", pre=True)
+    @field_validator("SQLALCHEMY_DATABASE_URI", mode='before')
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
         if isinstance(v, str):
             return v
@@ -50,6 +51,7 @@ class Settings(BaseSettings):
     PASSWORD_MIN_LENGTH: int = 12
     PASSWORD_MAX_LENGTH: int = 128
     PASSWORD_RESET_TOKEN_EXPIRE_HOURS: int = 24
+    JWT_ALGORITHM: str = "HS256"
     
     # Two-Factor Authentication
     TWO_FACTOR_AUTHENTICATION_ENABLED: bool = True
@@ -66,8 +68,11 @@ class Settings(BaseSettings):
     # Audit Log
     AUDIT_LOG_RETENTION_DAYS: int = 90
 
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=".env",
+        extra="allow"
+    )
 
+# Create settings instance
 settings = Settings()
