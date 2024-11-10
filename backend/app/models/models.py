@@ -1,29 +1,35 @@
 # backend/app/models/models.py
+from datetime import datetime
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Table, Text, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.ext.declarative import declarative_base
 
-Base = declarative_base()
+from ..db.session import Base
 
 # Association table for contact tags (many-to-many)
-contact_tags = Table('contact_tags', Base.metadata,
-    Column('contact_id', Integer, ForeignKey('contacts.id')),
-    Column('tag_id', Integer, ForeignKey('tags.id'))
+contact_tags = Table(
+    'contact_tags', 
+    Base.metadata,
+    Column('contact_id', Integer, ForeignKey('contacts.id', ondelete='CASCADE')),
+    Column('tag_id', Integer, ForeignKey('tags.id', ondelete='CASCADE'))
 )
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True)
-    username = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    email = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     two_factor_secret = Column(String)
+
+    # Relationships
+    contacts = relationship("Contact", back_populates="creator")
+    audit_logs = relationship("AuditLogEntry", back_populates="user")
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -72,13 +78,15 @@ class Contact(Base):
     
     # Relationships
     tags = relationship("Tag", secondary=contact_tags, back_populates="contacts")
-    creator = relationship("User")
+    creator = relationship("User", back_populates="contacts")
 
 class Tag(Base):
     __tablename__ = "tags"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+    
+    # Relationships
     contacts = relationship("Contact", secondary=contact_tags, back_populates="tags")
 
 class AuditLogEntry(Base):
@@ -86,12 +94,13 @@ class AuditLogEntry(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    action = Column(String)
+    action = Column(String, nullable=False)
     details = Column(Text)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     ip_address = Column(String)
 
-    user = relationship("User")
+    # Relationships
+    user = relationship("User", back_populates="audit_logs")
 
 class FailedLoginAttempt(Base):
     __tablename__ = "failed_login_attempts"
@@ -100,3 +109,6 @@ class FailedLoginAttempt(Base):
     username = Column(String)
     ip_address = Column(String)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+# Initialize models
+__all__ = ['Base', 'User', 'Contact', 'Tag', 'AuditLogEntry', 'FailedLoginAttempt', 'contact_tags']
