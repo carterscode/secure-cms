@@ -3,11 +3,20 @@ FROM python:3.11-slim as python-base
 
 # Python build stage
 FROM python-base as builder-base
+
+# Install system build dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
         curl \
         git \
+        libsnappy-dev \  # Added for python-snappy
+        pkg-config \
+        gcc \
+        g++ \
+        libpq-dev \
+        python3-dev \
+        libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install poetry
@@ -35,6 +44,14 @@ FROM python-base as development
 ENV FASTAPI_ENV=development
 ENV PYTHONPATH=/app
 
+# Install runtime dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libsnappy1v5 \
+        libpq5 \
+        libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy poetry installation from builder
 COPY --from=builder-base ${POETRY_VENV} ${POETRY_VENV}
 ENV PATH="${PATH}:${POETRY_VENV}/bin"
@@ -54,6 +71,14 @@ CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", 
 FROM python-base as production
 ENV FASTAPI_ENV=production
 ENV PYTHONPATH=/app
+
+# Install runtime dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libsnappy1v5 \
+        libpq5 \
+        libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy poetry installation from builder
 COPY --from=builder-base ${POETRY_VENV} ${POETRY_VENV}
