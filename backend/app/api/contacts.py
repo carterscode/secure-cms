@@ -1,12 +1,13 @@
 # backend/app/api/contacts.py
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+
+from ..core.dependencies import get_current_user
 from ..db.session import get_db
-from ..models.models import Contact, User, AuditLogEntry
+from ..models.models import Contact, User, AuditLogEntry, Tag
 from ..schemas.contact import ContactCreate, ContactUpdate, ContactResponse
 from ..services.vcard_handler import VCardHandler
-from ..core.security import get_current_user
 
 router = APIRouter()
 
@@ -19,8 +20,8 @@ async def list_contacts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List all contacts with optional filtering"""
-    query = db.query(Contact)
+    """List all contacts with optional filtering."""
+    query = db.query(Contact).filter(Contact.created_by == current_user.id)
     
     if search:
         query = query.filter(
@@ -31,7 +32,7 @@ async def list_contacts(
         )
     
     if tags:
-        query = query.filter(Contact.tags.any(Tag.name.in_(tags)))
+        query = query.join(Contact.tags).filter(Tag.name.in_(tags))
     
     total = query.count()
     contacts = query.offset(skip).limit(limit).all()
@@ -49,8 +50,18 @@ async def create_contact(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create a new contact"""
+    """Create a new contact."""
     db_contact = Contact(**contact.dict(), created_by=current_user.id)
+    
+    # Handle tags
+    if contact.tags:
+        for tag_name in contact.tags:
+            tag = db.query(Tag).filter(Tag.name == tag_name).first()
+            if not tag:
+                tag = Tag(name=tag_name)
+                db.add(tag)
+            db_contact.tags.append(tag)
+    
     db.add(db_contact)
     db.commit()
     db.refresh(db_contact)
@@ -72,8 +83,12 @@ async def get_contact(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get a specific contact"""
-    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    """Get a specific contact."""
+    contact = db.query(Contact).filter(
+        Contact.id == contact_id,
+        Contact.created_by == current_user.id
+    ).first()
+    
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     return contact
@@ -85,12 +100,29 @@ async def update_contact(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update a contact"""
-    db_contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    """Update a contact."""
+    db_contact = db.query(Contact).filter(
+        Contact.id == contact_id,
+        Contact.created_by == current_user.id
+    ).first()
+    
     if not db_contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     
-    for field, value in contact_update.dict(exclude_unset=True).items():
+    update_data = contact_update.dict(exclude_unset=True)
+    
+    # Handle tags update
+    if 'tags' in update_data:
+        db_contact.tags = []
+        for tag_name in update_data['tags']:
+            tag = db.query(Tag).filter(Tag.name == tag_name).first()
+            if not tag:
+                tag = Tag(name=tag_name)
+                db.add(tag)
+            db_contact.tags.append(tag)
+        del update_data['tags']
+    
+    for field, value in update_data.items():
         setattr(db_contact, field, value)
     
     db.commit()
@@ -113,8 +145,12 @@ async def delete_contact(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a contact"""
-    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    """Delete a contact."""
+    contact = db.query(Contact).filter(
+        Contact.id == contact_id,
+        Contact.created_by == current_user.id
+    ).first()
+    
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     
@@ -138,7 +174,7 @@ async def import_contacts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Import contacts from a VCard file"""
+    """Import contacts from a VCard file."""
     if not file.filename.endswith('.vcf'):
         raise HTTPException(
             status_code=400,
@@ -170,8 +206,12 @@ async def export_contacts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Export contacts to VCard format"""
-    contacts = db.query(Contact).filter(Contact.id.in_(contact_ids)).all()
+    """Export contacts to VCard format."""
+    contacts = db.query(Contact).filter(
+        Contact.id.in_(contact_ids),
+        Contact.created_by == current_user.id
+    ).all()
+    
     if not contacts:
         raise HTTPException(status_code=404, detail="No contacts found")
     
