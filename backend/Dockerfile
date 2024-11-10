@@ -1,38 +1,71 @@
 # backend/Dockerfile
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim as python-base
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    POETRY_VERSION=1.4.2 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_VIRTUALENVS_CREATE=false
-
-# Install system dependencies
+# Python build stage
+FROM python-base as builder-base
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl \
         build-essential \
-        libpq-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -sSL https://install.python-poetry.org | python3 -
+        curl \
+        git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Add Poetry to PATH
-ENV PATH="${POETRY_HOME}/bin:${PATH}"
+# Install poetry
+ENV POETRY_VERSION=1.8.4
+ENV POETRY_HOME=/opt/poetry
+ENV POETRY_VENV=/opt/poetry-venv
+ENV POETRY_CACHE_DIR=/opt/.cache
+
+# Install poetry separated from system interpreter
+RUN python3 -m venv $POETRY_VENV \
+    && $POETRY_VENV/bin/pip install -U pip setuptools \
+    && $POETRY_VENV/bin/pip install poetry==${POETRY_VERSION}
+
+# Add `poetry` to PATH
+ENV PATH="${PATH}:${POETRY_VENV}/bin"
 
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml poetry.lock ./
-
 # Install dependencies
-RUN poetry install --no-dev --no-interaction --no-ansi
+COPY poetry.lock pyproject.toml ./
+RUN poetry install --no-interaction --no-cache --no-root
+
+# Development stage
+FROM python-base as development
+ENV FASTAPI_ENV=development
+ENV PYTHONPATH=/app
+
+# Copy poetry installation from builder
+COPY --from=builder-base ${POETRY_VENV} ${POETRY_VENV}
+ENV PATH="${PATH}:${POETRY_VENV}/bin"
+
+WORKDIR /app
+COPY --from=builder-base /app/poetry.lock /app/pyproject.toml ./
 
 # Copy application code
 COPY . .
 
-# Run as non-root user
-RUN useradd -m appuser && chown -R appuser:appuser /app
-USER appuser
+# Install dependencies
+RUN poetry install --no-interaction
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+# Production stage
+FROM python-base as production
+ENV FASTAPI_ENV=production
+ENV PYTHONPATH=/app
+
+# Copy poetry installation from builder
+COPY --from=builder-base ${POETRY_VENV} ${POETRY_VENV}
+ENV PATH="${PATH}:${POETRY_VENV}/bin"
+
+WORKDIR /app
+COPY --from=builder-base /app/poetry.lock /app/pyproject.toml ./
+
+# Copy application code
+COPY . .
+
+# Install dependencies
+RUN poetry install --no-interaction --no-dev
+
+CMD ["poetry", "run", "gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
