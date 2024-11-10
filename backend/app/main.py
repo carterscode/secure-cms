@@ -1,4 +1,5 @@
 # backend/app/main.py
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -6,13 +7,23 @@ from fastapi.responses import JSONResponse
 from .core.config import settings
 from .core.security import SECURITY_HEADERS
 from .api import auth, contacts, users, tags
-from .db.session import init_db
+from .db.session import init_db, close_db
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events."""
+    # Startup
+    init_db()
+    yield
+    # Shutdown
+    close_db()
 
 # Create FastAPI app
 app = FastAPI(
     title=settings.SERVER_NAME,
     description="Secure Contact Management System",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -38,16 +49,6 @@ app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
 
-# Initialize database
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
 # Error handlers
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -55,3 +56,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error"}
     )
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
