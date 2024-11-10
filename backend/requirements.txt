@@ -21,14 +21,14 @@ pydantic-settings==2.1.0
 python-dotenv==1.0.1
 pyotp==2.9.0
 argon2-cffi==23.1.0
-cryptography==42.0.2
+cryptography==42.0.4  # Updated for CVE-2024-26130
 
 # HTTP and Networking
 httpx==0.26.0
 requests==2.31.0
 urllib3==2.2.0
 certifi==2024.2.2
-aiohttp==3.9.3
+aiohttp==3.9.4  # Updated for CVE-2024-30251
 
 # Email
 jinja2==3.1.3
@@ -40,7 +40,6 @@ email-validator==2.1.0.post1
 vobject==0.9.6.1
 orjson==3.9.15
 ujson==5.9.0
-python-magic==0.4.27
 python-snappy==0.6.1
 msgpack==1.0.7
 
@@ -109,12 +108,15 @@ aioredis==2.0.1
 # Dependency Management
 pip-tools==7.3.0
 pip==24.0
-setuptools==69.0.3
 wheel==0.42.0
+
+# Remove setuptools as it's not directly needed in production
+# and has a security vulnerability (CVE-2024-6345)
+# If needed in development, it should be in a separate requirements-dev.txt
 
 # Miscellaneous but Important
 pyOpenSSL==24.0.0
 cffi==1.16.0
-pillow==10.2.0  # For image processing
+pillow==10.2.0
 python-mimeparse==1.6.0
 zipp==3.17.0
