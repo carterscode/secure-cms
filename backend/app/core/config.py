@@ -1,7 +1,7 @@
 # backend/app/core/config.py
 import secrets
 from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, EmailStr, field_validator
+from pydantic import AnyHttpUrl, EmailStr, field_validator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -30,13 +30,12 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "secure_cms"
-    SQLALCHEMY_DATABASE_URI: Optional[str] = None
 
-    @field_validator("SQLALCHEMY_DATABASE_URI", mode='before')
-    def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
-        if isinstance(v, str):
-            return v
-        return f"postgresql://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_SERVER')}/{values.get('POSTGRES_DB')}"
+    @computed_field
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        """Compute the database URI from components."""
+        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
 
     # Email Configuration
     SMTP_TLS: bool = True
@@ -68,11 +67,22 @@ class Settings(BaseSettings):
     # Audit Log
     AUDIT_LOG_RETENTION_DAYS: int = 90
 
+    # Environment settings
+    ENV: str = "development"
+    DEBUG: bool = False
+    TESTING: bool = False
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",
+        env_file_encoding="utf-8",
         extra="allow"
     )
 
-# Create settings instance
+    def get_database_url(self) -> str:
+        """Get database URL based on environment."""
+        if self.TESTING:
+            return "sqlite:///./test.db"
+        return self.SQLALCHEMY_DATABASE_URI
+
 settings = Settings()
