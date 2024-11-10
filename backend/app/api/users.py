@@ -3,16 +3,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from ..core.security import SecurityUtils, get_current_user, get_current_admin_user
+from ..core.security import SecurityUtils
+from ..core.dependencies import get_current_user, get_current_admin_user
 from ..db.session import get_db
 from ..models.models import User, AuditLogEntry
-from ..schemas.user import (
+from ..schemas.auth import (
     UserCreate, 
     UserUpdate, 
     UserResponse, 
     UserListResponse,
     PasswordChange
 )
+from ..services.email import email_service
 
 router = APIRouter()
 
@@ -81,9 +83,8 @@ async def change_password(
     current_user.hashed_password = SecurityUtils.get_password_hash(
         password_data.new_password
     )
-    db.commit()
-
-    # Log the password change
+    
+    # Log password change
     audit_log = AuditLogEntry(
         user_id=current_user.id,
         action="change_password",
@@ -103,21 +104,18 @@ async def create_user(
     """
     Create new user. Only accessible by admin users.
     """
-    # Check if user exists
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered"
         )
     
-    # Validate password
     if not SecurityUtils.validate_password(user_data.password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Password does not meet security requirements"
         )
     
-    # Create user
     hashed_password = SecurityUtils.get_password_hash(user_data.password)
     db_user = User(
         email=user_data.email,
@@ -128,9 +126,7 @@ async def create_user(
     )
     
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-
+    
     # Log user creation
     audit_log = AuditLogEntry(
         user_id=current_user.id,
@@ -139,6 +135,7 @@ async def create_user(
     )
     db.add(audit_log)
     db.commit()
+    db.refresh(db_user)
 
     return db_user
 
@@ -206,6 +203,12 @@ async def delete_user(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found"
         )
+    
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete your own account"
+        )
 
     # Log user deletion
     audit_log = AuditLogEntry(
@@ -245,76 +248,6 @@ async def activate_user(
         details=f"Activated user: {user.email}"
     )
     db.add(audit_log)
-
     db.commit()
+
     return {"message": "User activated successfully"}
-
-@router.post("/{user_id}/deactivate")
-async def deactivate_user(
-    user_id: int,
-    current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Deactivate user account. Only accessible by admin users.
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    if user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot deactivate your own account"
-        )
-
-    user.is_active = False
-
-    # Log user deactivation
-    audit_log = AuditLogEntry(
-        user_id=current_user.id,
-        action="deactivate_user",
-        details=f"Deactivated user: {user.email}"
-    )
-    db.add(audit_log)
-
-    db.commit()
-    return {"message": "User deactivated successfully"}
-
-@router.post("/{user_id}/toggle-admin")
-async def toggle_admin_status(
-    user_id: int,
-    current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Toggle user's admin status. Only accessible by admin users.
-    """
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-
-    if user.id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot modify your own admin status"
-        )
-
-    user.is_admin = not user.is_admin
-
-    # Log admin status change
-    audit_log = AuditLogEntry(
-        user_id=current_user.id,
-        action="toggle_admin",
-        details=f"{'Granted' if user.is_admin else 'Revoked'} admin status for user: {user.email}"
-    )
-    db.add(audit_log)
-
-    db.commit()
-    return {"message": f"User admin status {'granted' if user.is_admin else 'revoked'} successfully"}
