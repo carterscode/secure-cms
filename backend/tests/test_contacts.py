@@ -1,7 +1,7 @@
 # backend/tests/test_contacts.py
 import pytest
 from fastapi import status
-from .utils import create_test_auth_headers
+from tests.utils import create_test_auth_headers
 
 def test_create_contact(client, test_user, auth_headers):
     """Test contact creation."""

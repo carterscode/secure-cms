@@ -1,7 +1,8 @@
 # backend/tests/test_auth.py
 import pytest
 from fastapi import status
-from .utils import create_test_auth_headers
+from tests.utils import create_test_auth_headers
+from app.core.security import SecurityUtils
 
 def test_login_success(client, test_user, test_password):
     """Test successful login."""
