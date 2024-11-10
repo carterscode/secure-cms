@@ -1,52 +1,63 @@
 # backend/tests/conftest.py
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from datetime import timedelta
+from sqlalchemy.engine import Engine
 
 from app.core.config import Settings
 from app.db.session import Base, get_db
 from app.main import app
 from app.core.security import SecurityUtils
+from app.models.models import User, Contact, Tag, AuditLogEntry  # Import all models
 
-TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+# Enable SQLite foreign key support
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
-# Create test engine
+# Override settings for testing
+def get_settings_override():
+    return Settings(
+        TESTING=True,
+        DEBUG=True,
+        DATABASE_URL="sqlite:///:memory:",
+        SECRET_KEY="test_secret_key",
+        BACKEND_CORS_ORIGINS=["http://test.com"],
+        TWO_FACTOR_AUTHENTICATION_ENABLED=False
+    )
+
+app.dependency_overrides[Settings] = get_settings_override
+
+# Create test database engine
 engine = create_engine(
-    TEST_SQLALCHEMY_DATABASE_URL,
+    "sqlite:///:memory:",
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    poolclass=StaticPool
 )
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_test_settings():
-    return Settings(
-        TESTING=True,
-        DATABASE_URL=TEST_SQLALCHEMY_DATABASE_URL,
-        SECRET_KEY="test_secret_key",
-        TWO_FACTOR_AUTHENTICATION_ENABLED=False,
-    )
-
 @pytest.fixture(scope="session", autouse=True)
-def override_settings():
-    app.dependency_overrides[Settings] = get_test_settings
+def create_test_database():
+    """Create the test database."""
+    Base.metadata.drop_all(bind=engine)  # Clear any existing tables
+    Base.metadata.create_all(bind=engine)  # Create all tables
     yield
-    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)  # Clean up after tests
 
-@pytest.fixture(scope="session")
-def db_engine():
-    Base.metadata.create_all(bind=engine)
-    yield engine
-    Base.metadata.drop_all(bind=engine)
-
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def db():
+    """Create a fresh database session for each test."""
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
+
+    # Create tables for this test session
+    Base.metadata.create_all(bind=connection)
     
     yield session
     
@@ -56,6 +67,7 @@ def db():
 
 @pytest.fixture
 def client(db):
+    """Create a test client with database session."""
     def override_get_db():
         try:
             yield db
@@ -66,16 +78,17 @@ def client(db):
     
     with TestClient(app) as test_client:
         yield test_client
+    
+    app.dependency_overrides.clear()
 
 @pytest.fixture
 def test_password() -> str:
+    """Provide a test password."""
     return "Test1234!"
 
 @pytest.fixture
 def test_user(db):
     """Create a test user."""
-    from app.models.models import User
-    
     user = User(
         email="test@example.com",
         username="testuser",
@@ -88,19 +101,8 @@ def test_user(db):
     return user
 
 @pytest.fixture
-def auth_headers(test_user):
-    """Get valid authentication headers."""
-    access_token = SecurityUtils.create_access_token(
-        data={"sub": test_user.email},
-        expires_delta=timedelta(minutes=30)
-    )
-    return {"Authorization": f"Bearer {access_token}"}
-
-@pytest.fixture
 def test_admin(db):
     """Create a test admin user."""
-    from app.models.models import User
-    
     admin = User(
         email="admin@example.com",
         username="admin",
@@ -114,19 +116,8 @@ def test_admin(db):
     return admin
 
 @pytest.fixture
-def admin_headers(test_admin):
-    """Get valid admin authentication headers."""
-    access_token = SecurityUtils.create_access_token(
-        data={"sub": test_admin.email},
-        expires_delta=timedelta(minutes=30)
-    )
-    return {"Authorization": f"Bearer {access_token}"}
-
-@pytest.fixture
 def test_contact(db, test_user):
     """Create a test contact."""
-    from app.models.models import Contact
-    
     contact = Contact(
         first_name="John",
         last_name="Doe",
@@ -138,3 +129,52 @@ def test_contact(db, test_user):
     db.commit()
     db.refresh(contact)
     return contact
+
+@pytest.fixture
+def test_tag(db):
+    """Create a test tag."""
+    tag = Tag(name="Test Tag")
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+@pytest.fixture
+def auth_headers(client, test_user):
+    """Get authentication headers."""
+    from datetime import timedelta
+    from app.core.config import settings
+    
+    access_token = SecurityUtils.create_access_token(
+        data={"sub": test_user.email},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"Authorization": f"Bearer {access_token}"}
+
+@pytest.fixture
+def admin_headers(client, test_admin):
+    """Get admin authentication headers."""
+    from datetime import timedelta
+    from app.core.config import settings
+    
+    access_token = SecurityUtils.create_access_token(
+        data={"sub": test_admin.email},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    )
+    return {"Authorization": f"Bearer {access_token}"}
+
+@pytest.fixture(autouse=True)
+def _init_test_db(db):
+    """Ensure database is initialized for each test."""
+    # Drop and recreate all tables for each test
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    db.close()
+
+# Silence SQLAlchemy warnings
+@pytest.fixture(autouse=True)
+def _silence_sqlalchemy(request):
+    import warnings
+    from sqlalchemy import exc as sa_exc
+    warnings.filterwarnings("ignore", category=sa_exc.SAWarning)
