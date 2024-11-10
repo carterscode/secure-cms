@@ -10,7 +10,7 @@ from ..core.config import settings
 
 # Enable SQLite optimizations
 @event.listens_for(Engine, "connect")
-def set_sqlite_pragmas(dbapi_connection, connection_record):
+def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     # Enable foreign keys
     cursor.execute("PRAGMA foreign_keys=ON")
@@ -75,10 +75,11 @@ def init_db():
         os.chmod(settings.DATABASE_DIR, 0o700)
         
         # Create database file with secure permissions
-        db_path = settings.DATABASE_URL.replace('sqlite:///', '')
-        if not os.path.exists(db_path):
-            open(db_path, 'a').close()
-            os.chmod(db_path, 0o600)
+        if settings.DATABASE_URL.startswith('sqlite:///'):
+            db_path = settings.DATABASE_URL.replace('sqlite:///', '')
+            if not os.path.exists(db_path):
+                open(db_path, 'a').close()
+                os.chmod(db_path, 0o600)
     
     # Import all models
     from ..models.models import User, Contact, Tag, AuditLogEntry, FailedLoginAttempt  # noqa
@@ -86,31 +87,18 @@ def init_db():
     # Create tables
     Base.metadata.create_all(bind=engine)
 
-def backup_database():
-    """Create a backup of the database."""
-    if settings.TESTING:
-        return
-        
-    import shutil
-    from datetime import datetime
-    
-    # Create backup directory
-    backup_dir = os.path.join(settings.DATABASE_DIR, 'backups')
-    os.makedirs(backup_dir, exist_ok=True)
-    os.chmod(backup_dir, 0o700)
-    
-    # Create backup file
-    db_path = settings.DATABASE_URL.replace('sqlite:///', '')
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_path = os.path.join(backup_dir, f'backup_{timestamp}.db')
-    
-    # Perform backup
-    with get_db_session() as db:
-        db.execute('VACUUM')  # Optimize database before backup
-        shutil.copy2(db_path, backup_path)
-        os.chmod(backup_path, 0o600)
+def dispose_db():
+    """Dispose of the database engine."""
+    if engine:
+        engine.dispose()
 
-def vacuum_database():
-    """Optimize database by removing unused space."""
-    with get_db_session() as db:
-        db.execute('VACUUM')
+# Export all needed functions and objects
+__all__ = [
+    'Base',
+    'SessionLocal',
+    'engine',
+    'get_db',
+    'get_db_session',
+    'init_db',
+    'dispose_db'
+]

@@ -7,23 +7,25 @@ from fastapi.responses import JSONResponse
 from .core.config import settings
 from .core.security import SECURITY_HEADERS
 from .api import auth, contacts, users, tags
-from .db.session import init_db, close_db
+from .db.session import init_db, dispose_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan events."""
+    """
+    Handle startup and shutdown events.
+    """
     # Startup
     init_db()
     yield
     # Shutdown
-    close_db()
+    dispose_db()
 
 # Create FastAPI app
 app = FastAPI(
     title=settings.SERVER_NAME,
     description="Secure Contact Management System",
     version="1.0.0",
-    lifespan=lifespan,
+    lifespan=lifespan
 )
 
 # Add CORS middleware
