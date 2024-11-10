@@ -1,9 +1,10 @@
 # backend/app/schemas/contact.py
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr
 from datetime import datetime
+from pydantic import EmailStr
+from .base import BaseSchema, TimestampedSchema
 
-class TagBase(BaseModel):
+class TagBase(BaseSchema):
     name: str
 
 class TagCreate(TagBase):
@@ -11,11 +12,8 @@ class TagCreate(TagBase):
 
 class Tag(TagBase):
     id: int
-    
-    class Config:
-        orm_mode = True
 
-class ContactBase(BaseModel):
+class ContactBase(BaseSchema):
     first_name: str
     last_name: str
     job_title: Optional[str] = None
@@ -51,20 +49,15 @@ class ContactUpdate(ContactBase):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
 
-class Contact(ContactBase):
+class Contact(ContactBase, TimestampedSchema):
     id: int
-    created_at: datetime
-    updated_at: Optional[datetime]
     created_by: int
     tags: List[Tag] = []
-    
-    class Config:
-        orm_mode = True
 
 class ContactResponse(Contact):
     pass
 
-class ContactImportPreview(BaseModel):
+class ContactImportPreview(BaseSchema):
     contacts: List[ContactBase]
     duplicates: List[ContactBase]
     total: int

@@ -1,5 +1,56 @@
 # backend/app/schemas/__init__.py
-"""
-backend/app/schemas/__init__.py
-Pydantic schemas package.
-"""
+"""Schema package for the application."""
+
+from .auth import (
+    Token,
+    TokenData,
+    UserBase,
+    UserCreate,
+    UserLogin,
+    UserInDB,
+    TwoFactorSetup,
+    TwoFactorResponse,
+    TwoFactorVerify,
+    PasswordChange,
+    PasswordReset,
+    PasswordResetConfirm,
+)
+
+from .contact import (
+    ContactBase,
+    ContactCreate,
+    ContactUpdate,
+    Contact,
+    ContactResponse,
+    ContactImportPreview,
+    TagBase,
+    TagCreate,
+    Tag,
+)
+
+__all__ = [
+    # Auth schemas
+    "Token",
+    "TokenData",
+    "UserBase",
+    "UserCreate",
+    "UserLogin",
+    "UserInDB",
+    "TwoFactorSetup",
+    "TwoFactorResponse",
+    "TwoFactorVerify",
+    "PasswordChange",
+    "PasswordReset",
+    "PasswordResetConfirm",
+    
+    # Contact schemas
+    "ContactBase",
+    "ContactCreate",
+    "ContactUpdate",
+    "Contact",
+    "ContactResponse",
+    "ContactImportPreview",
+    "TagBase",
+    "TagCreate",
+    "Tag",
+]
