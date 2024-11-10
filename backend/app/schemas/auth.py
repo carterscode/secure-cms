@@ -32,6 +32,16 @@ class UserCreate(UserBase):
             )
         return v
 
+class UserUpdate(BaseModel):
+    """Schema for updating user information."""
+    email: Optional[EmailStr] = None
+    username: Optional[constr(min_length=3, max_length=50)] = None
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
+
+    class Config:
+        from_attributes = True
+
 class UserLogin(BaseModel):
     username: str
     password: str
@@ -44,6 +54,19 @@ class UserInDB(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserResponse(UserBase):
+    """Schema for user response data."""
+    id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class UserListResponse(UserResponse):
+    """Schema for user list response."""
+    pass
 
 # 2FA schemas
 class TwoFactorSetup(BaseModel):
@@ -88,3 +111,59 @@ class PasswordResetConfirm(BaseModel):
                 'one lowercase letter, one number, and one special character'
             )
         return v
+
+# 2FA Configuration schemas
+class TwoFactorConfig(BaseModel):
+    """Schema for 2FA configuration."""
+    enabled: bool = True
+    secret: Optional[str] = None
+    backup_codes: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+# Audit log schemas
+class AuditLogEntry(BaseModel):
+    """Schema for audit log entries."""
+    id: int
+    user_id: int
+    action: str
+    details: Optional[str]
+    timestamp: datetime
+    ip_address: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+# Failed login attempt schema
+class FailedLoginAttempt(BaseModel):
+    """Schema for failed login attempts."""
+    id: int
+    username: str
+    ip_address: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+# Export all schemas
+__all__ = [
+    'Token',
+    'TokenData',
+    'UserBase',
+    'UserCreate',
+    'UserUpdate',
+    'UserLogin',
+    'UserInDB',
+    'UserResponse',
+    'UserListResponse',
+    'TwoFactorSetup',
+    'TwoFactorResponse',
+    'TwoFactorVerify',
+    'TwoFactorConfig',
+    'PasswordChange',
+    'PasswordReset',
+    'PasswordResetConfirm',
+    'AuditLogEntry',
+    'FailedLoginAttempt',
+]
