@@ -9,8 +9,8 @@ on:
 
 env:
   AWS_REGION: us-west-2
-  ECR_REPOSITORY_BACKEND: secure-cms-backend
-  ECR_REPOSITORY_FRONTEND: secure-cms-frontend
+  ECR_REPOSITORY_BACKEND: 778557655318.dkr.ecr.us-east-1.amazonaws.com/secure-cms-backend
+  ECR_REPOSITORY_FRONTEND: 778557655318.dkr.ecr.us-east-1.amazonaws.com/secure-cms-frontend
 
 jobs:
   test:
