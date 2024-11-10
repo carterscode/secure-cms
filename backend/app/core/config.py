@@ -1,8 +1,9 @@
 # backend/app/core/config.py
 import secrets
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional
 from pydantic import AnyHttpUrl, EmailStr, field_validator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
@@ -11,6 +12,22 @@ class Settings(BaseSettings):
     SERVER_NAME: str = "Secure CMS"
     SERVER_HOST: AnyHttpUrl = "http://localhost:8000"
     
+    # Database Configuration
+    DATABASE_DIR: str = "data"
+    DATABASE_FILENAME: str = "secure_cms.db"
+
+    @computed_field
+    @property
+    def DATABASE_URL(self) -> str:
+        """Compute the database URL."""
+        if self.TESTING:
+            return "sqlite:///:memory:"
+        
+        # Ensure data directory exists
+        os.makedirs(self.DATABASE_DIR, exist_ok=True)
+        db_path = os.path.join(self.DATABASE_DIR, self.DATABASE_FILENAME)
+        return f"sqlite:///{db_path}"
+    
     # CORS Configuration
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
         "http://localhost:3000",  # React frontend
@@ -18,24 +35,10 @@ class Settings(BaseSettings):
     ]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode='before')
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+    def assemble_cors_origins(cls, v):
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
-
-    # Database Configuration
-    POSTGRES_SERVER: str = "localhost"
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "secure_cms"
-
-    @computed_field
-    @property
-    def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Compute the database URI from components."""
-        return f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}/{self.POSTGRES_DB}"
+        return v
 
     # Email Configuration
     SMTP_TLS: bool = True
@@ -78,11 +81,5 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="allow"
     )
-
-    def get_database_url(self) -> str:
-        """Get database URL based on environment."""
-        if self.TESTING:
-            return "sqlite:///./test.db"
-        return self.SQLALCHEMY_DATABASE_URI
 
 settings = Settings()

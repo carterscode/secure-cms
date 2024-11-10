@@ -1,20 +1,23 @@
 # backend/app/db/session.py
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
+import os
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.engine import Engine
+from sqlalchemy.ext.declarative import declarative_base
 
 from ..core.config import settings
 
-# Create database engine with connection pooling
+# Enable SQLite foreign key support
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
+# Create database engine
 engine = create_engine(
-    settings.get_database_url(),
-    poolclass=QueuePool,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,  # Recycle connections after 30 minutes
-    pool_pre_ping=True,  # Enable connection health checks
+    settings.DATABASE_URL,
+    connect_args={"check_same_thread": False},  # Required for SQLite
 )
 
 # Create session factory
@@ -27,32 +30,32 @@ SessionLocal = sessionmaker(
 # Create declarative base
 Base = declarative_base()
 
-# Dependency for database sessions
 def get_db():
-    """
-    Dependency provider for database sessions.
-    Ensures proper handling of database connections.
-    """
+    """Dependency for database sessions."""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# Database utilities
 def init_db():
-    """Initialize database tables"""
+    """Initialize database and create tables."""
+    # Create data directory if it doesn't exist
+    if not settings.TESTING:
+        os.makedirs(settings.DATABASE_DIR, exist_ok=True)
+    
     # Import all models to ensure they're registered with SQLAlchemy
     from ..models.models import User, Contact, Tag, AuditLogEntry, FailedLoginAttempt  # noqa
+    
+    # Create all tables
     Base.metadata.create_all(bind=engine)
 
 def close_db():
-    """Close database connections"""
+    """Close database connections."""
     engine.dispose()
 
-# Connection health check
 def check_db_connection():
-    """Check if database connection is healthy"""
+    """Check if database connection is healthy."""
     try:
         db = SessionLocal()
         db.execute("SELECT 1")
@@ -62,6 +65,3 @@ def check_db_connection():
         return False
     finally:
         db.close()
-
-# Import all models to ensure they're registered with SQLAlchemy
-from ..models import models  # noqa

@@ -10,11 +10,7 @@ RUN apt-get update \
         build-essential \
         curl \
         git \
-        libsnappy-dev \  # Added for python-snappy
         pkg-config \
-        gcc \
-        g++ \
-        libpq-dev \
         python3-dev \
         libmagic1 \
     && rm -rf /var/lib/apt/lists/*
@@ -39,34 +35,6 @@ WORKDIR /app
 COPY poetry.lock pyproject.toml ./
 RUN poetry install --no-interaction --no-cache --no-root
 
-# Development stage
-FROM python-base as development
-ENV FASTAPI_ENV=development
-ENV PYTHONPATH=/app
-
-# Install runtime dependencies
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        libsnappy1v5 \
-        libpq5 \
-        libmagic1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy poetry installation from builder
-COPY --from=builder-base ${POETRY_VENV} ${POETRY_VENV}
-ENV PATH="${PATH}:${POETRY_VENV}/bin"
-
-WORKDIR /app
-COPY --from=builder-base /app/poetry.lock /app/pyproject.toml ./
-
-# Copy application code
-COPY . .
-
-# Install dependencies
-RUN poetry install --no-interaction
-
-CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
-
 # Production stage
 FROM python-base as production
 ENV FASTAPI_ENV=production
@@ -75,8 +43,6 @@ ENV PYTHONPATH=/app
 # Install runtime dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        libsnappy1v5 \
-        libpq5 \
         libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -85,12 +51,17 @@ COPY --from=builder-base ${POETRY_VENV} ${POETRY_VENV}
 ENV PATH="${PATH}:${POETRY_VENV}/bin"
 
 WORKDIR /app
-COPY --from=builder-base /app/poetry.lock /app/pyproject.toml ./
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data && chown -R nobody:nogroup /app/data
 
 # Copy application code
-COPY . .
+COPY --chown=nobody:nogroup . .
 
 # Install dependencies
 RUN poetry install --no-interaction --no-dev
+
+# Switch to non-root user
+USER nobody
 
 CMD ["poetry", "run", "gunicorn", "app.main:app", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
