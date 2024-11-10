@@ -5,7 +5,10 @@ version = "1.0.0"
 description = "A secure contact management system"
 authors = ["Secure CMS Team"]
 readme = "README.md"
-packages = [{include = "app"}]
+packages = [
+    { include = "app", from = "." },
+    { include = "tests", from = "." }
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -93,6 +96,10 @@ disallow_untyped_defs = true
 check_untyped_defs = true
 
 [tool.pytest.ini_options]
+pythonpath = [
+    ".",
+    "app"
+]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
