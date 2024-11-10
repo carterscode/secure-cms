@@ -1,39 +1,36 @@
 # backend/app/main.py
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from datetime import timedelta
-import secrets
 
-from .core.security import SecurityUtils, SECURITY_HEADERS
-from .db.session import get_db
-from .api import auth, contacts, users, tags
 from .core.config import settings
+from .core.security import SECURITY_HEADERS
+from .api import auth, contacts, users, tags
+from .db.session import init_db
 
+# Create FastAPI app
 app = FastAPI(
-    title="Secure CMS",
-    description="A secure contact management system",
-    version="1.0.0"
+    title=settings.SERVER_NAME,
+    description="Secure Contact Management System",
+    version="1.0.0",
 )
 
-# Security middleware
-@app.middleware("http")
-async def security_headers_middleware(request: Request, call_next):
-    response = await call_next(request)
-    for key, value in SECURITY_HEADERS.items():
-        response.headers[key] = value
-    return response
-
-# CORS configuration
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for key, value in SECURITY_HEADERS.items():
+        response.headers[key] = value
+    return response
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
@@ -41,19 +38,20 @@ app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
 
+# Initialize database
+@app.on_event("startup")
+async def startup_event():
+    init_db()
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
 
 # Error handlers
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
+        status_code=500,
+        content={"detail": "Internal server error"}
     )
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
