@@ -12,57 +12,70 @@ env:
   ECR_REPOSITORY_BACKEND: secrets.ECR_REPOSITORY_BACKEND
   ECR_REPOSITORY_FRONTEND: secrets.ECR_REPOSITORY_FRONTEND
 
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
+
 jobs:
-  test:
+  backend-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
-
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libsnappy-dev pkg-config gcc g++ libpq-dev python3-dev libmagic1
-        
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
     - name: Install Poetry
       run: |
         curl -sSL https://install.python-poetry.org | python3 -
-        
-    - name: Configure Poetry
-      run: |
         poetry config virtualenvs.in-project true
-        
+    
+    - name: Cache Poetry dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pypoetry
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+    
     - name: Install dependencies
-      run: |
-        cd backend
-        poetry install
-        
+      run: poetry install
+      
     - name: Run tests
-      run: |
-        cd backend
-        PYTHONPATH=$PYTHONPATH:$(pwd) poetry run pytest
-      env:
-        PYTHONPATH: ${{ github.workspace }}/backend
+      run: poetry run pytest
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: './frontend/package-lock.json'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test
 
   security-scan:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-
-    # Cache Trivy vulnerability database
-    - name: Cache Trivy vulnerability DB
-      uses: actions/cache@v4
-      with:
-        path: .trivy
-        key: trivy-db-${{ github.sha }}
-        restore-keys: |
-          trivy-db-
-
-    - name: Run Trivy vulnerability scanner with retries
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'fs'
@@ -70,25 +83,16 @@ jobs:
         format: 'table'
         exit-code: '1'
         ignore-unfixed: true
-        severity: 'CRITICAL,HIGH'
-        cache-dir: .trivy
-        skip-dirs: 'tests,docs'
-        timeout: '10m'
-        retries: 3
-        wait-retry: 30s
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TRIVY_NO_PROGRESS: true
-        TRIVY_QUIET: true
+        severity: 'CRITICAL'
 
   build-and-push:
-    needs: [test, security-scan]
+    needs: [backend-test, frontend-test, security-scan]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v4
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -96,7 +100,7 @@ jobs:
     
     - name: Login to Amazon ECR
       id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+      uses: aws-actions/amazon-ecr-login@v2
     
     - name: Build and push backend image
       env:
@@ -115,13 +119,3 @@ jobs:
         cd frontend
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
-    steps:
-    - name: Deploy
-      run: |
-        echo "Deployment would go here - typically to ECS/EKS"
-
