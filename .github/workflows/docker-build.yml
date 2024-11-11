@@ -44,7 +44,6 @@ jobs:
     - name: Run tests
       run: |
         cd backend
-        # Add the current directory to PYTHONPATH
         PYTHONPATH=$PYTHONPATH:$(pwd) poetry run pytest
       env:
         PYTHONPATH: ${{ github.workspace }}/backend
@@ -53,8 +52,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Run Trivy vulnerability scanner
+
+    # Cache Trivy vulnerability database
+    - name: Cache Trivy vulnerability DB
+      uses: actions/cache@v4
+      with:
+        path: .trivy
+        key: trivy-db-${{ github.sha }}
+        restore-keys: |
+          trivy-db-
+
+    - name: Run Trivy vulnerability scanner with retries
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'fs'
@@ -63,6 +71,15 @@ jobs:
         exit-code: '1'
         ignore-unfixed: true
         severity: 'CRITICAL,HIGH'
+        cache-dir: .trivy
+        skip-dirs: 'tests,docs'
+        timeout: '10m'
+        retries: 3
+        wait-retry: 30s
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TRIVY_NO_PROGRESS: true
+        TRIVY_QUIET: true
 
   build-and-push:
     needs: [test, security-scan]
@@ -107,3 +124,4 @@ jobs:
     - name: Deploy
       run: |
         echo "Deployment would go here - typically to ECS/EKS"
+
