@@ -2,55 +2,23 @@
 """Schema package for the application."""
 
 from .auth import (
-    Token,
-    TokenData,
+    TokenBase as Token,
     UserBase,
     UserCreate,
-    UserLogin,
+    UserUpdate,
     UserInDB,
-    TwoFactorSetup,
+    UserResponse,
     TwoFactorResponse,
-    TwoFactorVerify,
-    PasswordChange,
-    PasswordReset,
-    PasswordResetConfirm,
-)
-
-from .contact import (
-    ContactBase,
-    ContactCreate,
-    ContactUpdate,
-    Contact,
-    ContactResponse,
-    ContactImportPreview,
-    TagBase,
-    TagCreate,
-    Tag,
+    PasswordUpdate,
 )
 
 __all__ = [
-    # Auth schemas
-    "Token",
-    "TokenData",
-    "UserBase",
-    "UserCreate",
-    "UserLogin",
-    "UserInDB",
-    "TwoFactorSetup",
-    "TwoFactorResponse",
-    "TwoFactorVerify",
-    "PasswordChange",
-    "PasswordReset",
-    "PasswordResetConfirm",
-    
-    # Contact schemas
-    "ContactBase",
-    "ContactCreate",
-    "ContactUpdate",
-    "Contact",
-    "ContactResponse",
-    "ContactImportPreview",
-    "TagBase",
-    "TagCreate",
-    "Tag",
+    'Token',
+    'UserBase',
+    'UserCreate',
+    'UserUpdate',
+    'UserInDB',
+    'UserResponse',
+    'TwoFactorResponse',
+    'PasswordUpdate',
 ]
