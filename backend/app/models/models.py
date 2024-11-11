@@ -6,9 +6,10 @@ from sqlalchemy.sql import func
 
 from ..db.session import Base
 
-# Association table for contact tags
+# Association table for contact tags (many-to-many)
 contact_tags = Table(
-    'contact_tags', Base.metadata,
+    'contact_tags', 
+    Base.metadata,
     Column('contact_id', Integer, ForeignKey('contacts.id', ondelete='CASCADE')),
     Column('tag_id', Integer, ForeignKey('tags.id', ondelete='CASCADE'))
 )
@@ -16,7 +17,7 @@ contact_tags = Table(
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
@@ -25,14 +26,19 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     two_factor_secret = Column(String)
+    failed_login_attempts = Column(Integer, default=0)
+    last_login_attempt = Column(DateTime(timezone=True))
+    password_reset_token = Column(String, unique=True, index=True)
+    password_reset_expires = Column(DateTime(timezone=True))
 
+    # Relationships
     contacts = relationship("Contact", back_populates="creator", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLogEntry", back_populates="user", cascade="all, delete-orphan")
 
 class Contact(Base):
     __tablename__ = "contacts"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     job_title = Column(String)
@@ -48,7 +54,7 @@ class Contact(Base):
     other_phone = Column(String)
     
     # Emails
-    email = Column(String)
+    email = Column(String, index=True)
     work_email = Column(String)
     home_email = Column(String)
     icloud_email = Column(String)
@@ -72,7 +78,7 @@ class Contact(Base):
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    created_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     
     # Relationships
     tags = relationship("Tag", secondary=contact_tags, back_populates="contacts")
@@ -81,37 +87,41 @@ class Contact(Base):
 class Tag(Base):
     __tablename__ = "tags"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
     contacts = relationship("Contact", secondary=contact_tags, back_populates="tags")
 
 class AuditLogEntry(Base):
     __tablename__ = "audit_log"
 
-    id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     action = Column(String, nullable=False)
     details = Column(Text)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     ip_address = Column(String)
+    user_agent = Column(String)
 
+    # Relationships
     user = relationship("User", back_populates="audit_logs")
 
 class FailedLoginAttempt(Base):
     __tablename__ = "failed_login_attempts"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, index=True)
     username = Column(String, nullable=False)
     ip_address = Column(String, nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    user_agent = Column(String)
+    attempt_count = Column(Integer, default=1)
 
-# Export all models
-__all__ = [
-    'Base',
-    'User',
-    'Contact',
-    'Tag',
-    'AuditLogEntry',
-    'FailedLoginAttempt',
-    'contact_tags'
-]
+class DatabaseVersion(Base):
+    __tablename__ = "database_version"
+
+    id = Column(Integer, primary_key=True)
+    version = Column(String, nullable=False)
+    upgraded_at = Column(DateTime(timezone=True), server_default=func.now())
+    upgraded_by = Column(String)

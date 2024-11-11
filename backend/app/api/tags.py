@@ -1,6 +1,6 @@
 # backend/app/api/tags.py
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -13,33 +13,45 @@ router = APIRouter()
 
 @router.get("/", response_model=List[TagSchema])
 async def list_tags(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    List all available tags.
-    """
+    """List all available tags."""
     tags = db.query(Tag).all()
+    
+    # Log action
+    audit_log = AuditLogEntry(
+        user_id=current_user.id,
+        action="list_tags",
+        details="Listed all tags",
+        ip_address=request.client.host,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.add(audit_log)
+    db.commit()
+    
     return tags
 
 @router.post("/", response_model=TagSchema)
 async def create_tag(
+    request: Request,
     tag: TagCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Create a new tag.
-    """
+    """Create a new tag."""
     try:
         db_tag = Tag(name=tag.name)
         db.add(db_tag)
         
-        # Log the action
+        # Log action
         audit_log = AuditLogEntry(
             user_id=current_user.id,
             action="create_tag",
-            details=f"Created tag: {tag.name}"
+            details=f"Created tag: {tag.name}",
+            ip_address=request.client.host,
+            user_agent=request.headers.get("user-agent")
         )
         db.add(audit_log)
         
@@ -56,31 +68,41 @@ async def create_tag(
 
 @router.get("/{tag_id}", response_model=TagSchema)
 async def get_tag(
+    request: Request,
     tag_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get a specific tag by ID.
-    """
+    """Get a specific tag by ID."""
     tag = db.query(Tag).filter(Tag.id == tag_id).first()
     if not tag:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tag not found"
         )
+    
+    # Log action
+    audit_log = AuditLogEntry(
+        user_id=current_user.id,
+        action="view_tag",
+        details=f"Viewed tag: {tag.name}",
+        ip_address=request.client.host,
+        user_agent=request.headers.get("user-agent")
+    )
+    db.add(audit_log)
+    db.commit()
+    
     return tag
 
 @router.put("/{tag_id}", response_model=TagSchema)
 async def update_tag(
+    request: Request,
     tag_id: int,
     tag_update: TagCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Update a tag.
-    """
+    """Update a tag."""
     db_tag = db.query(Tag).filter(Tag.id == tag_id).first()
     if not db_tag:
         raise HTTPException(
@@ -91,11 +113,13 @@ async def update_tag(
     try:
         db_tag.name = tag_update.name
         
-        # Log the action
+        # Log action
         audit_log = AuditLogEntry(
             user_id=current_user.id,
             action="update_tag",
-            details=f"Updated tag {tag_id}: {tag_update.name}"
+            details=f"Updated tag {tag_id}: {tag_update.name}",
+            ip_address=request.client.host,
+            user_agent=request.headers.get("user-agent")
         )
         db.add(audit_log)
         
@@ -112,13 +136,12 @@ async def update_tag(
 
 @router.delete("/{tag_id}")
 async def delete_tag(
+    request: Request,
     tag_id: int,
     current_user: User = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Delete a tag. Only accessible by admin users.
-    """
+    """Delete a tag. Only accessible by admin users."""
     tag = db.query(Tag).filter(Tag.id == tag_id).first()
     if not tag:
         raise HTTPException(
@@ -133,11 +156,13 @@ async def delete_tag(
             detail="Cannot delete tag while it is in use"
         )
     
-    # Log the action
+    # Log action
     audit_log = AuditLogEntry(
         user_id=current_user.id,
         action="delete_tag",
-        details=f"Deleted tag: {tag.name}"
+        details=f"Deleted tag: {tag.name}",
+        ip_address=request.client.host,
+        user_agent=request.headers.get("user-agent")
     )
     db.add(audit_log)
     
@@ -145,81 +170,3 @@ async def delete_tag(
     db.commit()
     
     return {"message": "Tag deleted successfully"}
-
-@router.get("/search/{name}", response_model=List[TagSchema])
-async def search_tags(
-    name: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Search tags by name.
-    """
-    tags = db.query(Tag).filter(Tag.name.ilike(f"%{name}%")).all()
-    return tags
-
-@router.get("/stats/usage", response_model=List[dict])
-async def get_tag_usage_stats(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get usage statistics for tags.
-    """
-    tags = db.query(Tag).all()
-    stats = [
-        {
-            "id": tag.id,
-            "name": tag.name,
-            "contact_count": len(tag.contacts)
-        }
-        for tag in tags
-    ]
-    return stats
-
-@router.post("/merge/{source_id}/{target_id}")
-async def merge_tags(
-    source_id: int,
-    target_id: int,
-    current_user: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Merge two tags. Moves all contacts from source tag to target tag.
-    Only accessible by admin users.
-    """
-    source_tag = db.query(Tag).filter(Tag.id == source_id).first()
-    target_tag = db.query(Tag).filter(Tag.id == target_id).first()
-    
-    if not source_tag or not target_tag:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="One or both tags not found"
-        )
-    
-    if source_id == target_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot merge tag with itself"
-        )
-    
-    # Move all contacts from source to target
-    for contact in source_tag.contacts:
-        if target_tag not in contact.tags:
-            contact.tags.append(target_tag)
-    
-    # Log the action
-    audit_log = AuditLogEntry(
-        user_id=current_user.id,
-        action="merge_tags",
-        details=f"Merged tag {source_tag.name} into {target_tag.name}"
-    )
-    db.add(audit_log)
-    
-    # Delete source tag
-    db.delete(source_tag)
-    db.commit()
-    
-    return {
-        "message": f"Successfully merged tag '{source_tag.name}' into '{target_tag.name}'"
-    }

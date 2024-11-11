@@ -1,11 +1,12 @@
 # backend/app/core/config.py
 import secrets
+import os
 from typing import List, Optional
 from pydantic import AnyHttpUrl, EmailStr, field_validator, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
 
 class Settings(BaseSettings):
+    # API Settings
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -82,4 +83,5 @@ class Settings(BaseSettings):
         extra="allow"
     )
 
+# Create settings instance
 settings = Settings()

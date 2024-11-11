@@ -1,7 +1,6 @@
 # backend/app/models/__init__.py
-"""Models package for the application."""
+"""Database models package."""
 
-# Import all models here
 from .models import (
     Base,
     User,
@@ -9,15 +8,17 @@ from .models import (
     Tag,
     AuditLogEntry,
     FailedLoginAttempt,
+    DatabaseVersion,
     contact_tags
 )
 
 __all__ = [
-    'Base',
-    'User',
-    'Contact',
-    'Tag',
-    'AuditLogEntry',
-    'FailedLoginAttempt',
-    'contact_tags'
+    "Base",
+    "User",
+    "Contact",
+    "Tag",
+    "AuditLogEntry",
+    "FailedLoginAttempt",
+    "DatabaseVersion",
+    "contact_tags",
 ]

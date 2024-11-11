@@ -8,12 +8,12 @@ from .users import router as users_router
 from .tags import router as tags_router
 
 # Create API router
-router = APIRouter()
+api_router = APIRouter()
 
-# Include all routers
-router.include_router(auth_router, prefix="/auth", tags=["auth"])
-router.include_router(contacts_router, prefix="/contacts", tags=["contacts"])
-router.include_router(users_router, prefix="/users", tags=["users"])
-router.include_router(tags_router, prefix="/tags", tags=["tags"])
+# Include all routers with prefixes and tags
+api_router.include_router(auth_router, prefix="/auth", tags=["authentication"])
+api_router.include_router(users_router, prefix="/users", tags=["users"])
+api_router.include_router(contacts_router, prefix="/contacts", tags=["contacts"])
+api_router.include_router(tags_router, prefix="/tags", tags=["tags"])
 
-__all__ = ["router"]
+__all__ = ["api_router"]

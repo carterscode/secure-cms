@@ -7,18 +7,20 @@ from fastapi.responses import JSONResponse
 from .core.config import settings
 from .core.security import SECURITY_HEADERS
 from .api import auth, contacts, users, tags
-from .db.session import init_db, dispose_db
+from .db.session import init_db
 
+# Lifespan context manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Handle startup and shutdown events.
+    Lifespan context manager for FastAPI application.
+    Handles startup and shutdown events.
     """
     # Startup
     init_db()
     yield
     # Shutdown
-    dispose_db()
+    # Add any cleanup here if needed
 
 # Create FastAPI app
 app = FastAPI(
@@ -51,6 +53,11 @@ app.include_router(contacts.router, prefix="/api/contacts", tags=["contacts"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(tags.router, prefix="/api/tags", tags=["tags"])
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
 # Error handlers
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -58,8 +65,3 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error"}
     )
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}

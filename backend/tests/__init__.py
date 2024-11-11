@@ -1,14 +1,19 @@
 # backend/tests/__init__.py
-"""Test package for the application."""
+"""Test suite for the Secure CMS application.
 
-from .utils import (
-    create_test_auth_headers,
-    create_test_user_data,
-    create_test_contact_data
-)
+This package contains all tests for the application, including:
+- Unit tests
+- Integration tests
+- API tests
+- Security tests
+"""
+
+from .utils import *
 
 __all__ = [
-    'create_test_auth_headers',
-    'create_test_user_data',
-    'create_test_contact_data'
+    'create_test_token',
+    'random_lower_string',
+    'random_email',
+    'random_phone',
+    'get_test_db_url',
 ]

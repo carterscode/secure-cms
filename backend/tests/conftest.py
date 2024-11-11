@@ -1,33 +1,54 @@
 # backend/tests/conftest.py
 import pytest
+from typing import Dict, Generator
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
-from datetime import timedelta
 
 from app.core.config import Settings, settings
 from app.core.security import SecurityUtils
 from app.db.session import Base, get_db
 from app.main import app
-from app.models.models import User, Contact, Tag
+from app.models.models import User, Contact, Tag, AuditLogEntry
+from .utils import create_test_token, random_email, random_lower_string
+
+# Test database URL
+TEST_DATABASE_URL = "sqlite:///:memory:"
 
 # Create test database engine
 engine = create_engine(
-    "sqlite:///:memory:",
+    TEST_DATABASE_URL,
     connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    poolclass=StaticPool
 )
+
+# Create test session factory
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Override settings for testing
+def get_settings_override() -> Settings:
+    return Settings(
+        TESTING=True,
+        DEBUG=True,
+        DATABASE_URL=TEST_DATABASE_URL,
+        SECRET_KEY="test_secret_key",
+        BACKEND_CORS_ORIGINS=["http://test.com"],
+        TWO_FACTOR_AUTHENTICATION_ENABLED=False,
+        SMTP_HOST="localhost",
+        SMTP_PORT=25
+    )
+
 @pytest.fixture(scope="session")
-def db_engine():
+def db_engine() -> Generator:
+    """Create test database engine."""
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
 
-@pytest.fixture
-def db(db_engine):
+@pytest.fixture(autouse=True)
+def db() -> Generator[Session, None, None]:
+    """Create a fresh database session for each test."""
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
@@ -39,14 +60,10 @@ def db(db_engine):
     connection.close()
 
 @pytest.fixture
-def client(db):
-    def override_get_db():
-        try:
-            yield db
-        finally:
-            db.close()
-    
-    app.dependency_overrides[get_db] = override_get_db
+def client(db: Session) -> Generator:
+    """Create a test client with database session."""
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[Settings] = get_settings_override
     
     with TestClient(app) as test_client:
         yield test_client
@@ -55,13 +72,15 @@ def client(db):
 
 @pytest.fixture
 def test_password() -> str:
+    """Provide a test password."""
     return "Test1234!"
 
 @pytest.fixture
-def test_user(db):
+def test_user(db: Session) -> User:
+    """Create a test user."""
     user = User(
-        email="test@example.com",
-        username="testuser",
+        email=random_email(),
+        username=random_lower_string(),
         hashed_password=SecurityUtils.get_password_hash("Test1234!"),
         is_active=True
     )
@@ -71,10 +90,11 @@ def test_user(db):
     return user
 
 @pytest.fixture
-def test_admin(db):
+def test_admin(db: Session) -> User:
+    """Create a test admin user."""
     admin = User(
-        email="admin@example.com",
-        username="admin",
+        email=random_email(),
+        username=random_lower_string(),
         hashed_password=SecurityUtils.get_password_hash("Test1234!"),
         is_active=True,
         is_admin=True
@@ -85,7 +105,8 @@ def test_admin(db):
     return admin
 
 @pytest.fixture
-def test_contact(db, test_user):
+def test_contact(db: Session, test_user: User) -> Contact:
+    """Create a test contact."""
     contact = Contact(
         first_name="John",
         last_name="Doe",
@@ -99,7 +120,8 @@ def test_contact(db, test_user):
     return contact
 
 @pytest.fixture
-def test_tag(db):
+def test_tag(db: Session) -> Tag:
+    """Create a test tag."""
     tag = Tag(name="Test Tag")
     db.add(tag)
     db.commit()
@@ -107,56 +129,37 @@ def test_tag(db):
     return tag
 
 @pytest.fixture
-def user_token_headers(test_user):
-    access_token = SecurityUtils.create_access_token(
-        data={"sub": test_user.email},
-        expires_delta=timedelta(minutes=30)
-    )
+def auth_headers(test_user: User) -> Dict[str, str]:
+    """Get authentication headers."""
+    access_token = create_test_token(test_user.email)
     return {"Authorization": f"Bearer {access_token}"}
 
 @pytest.fixture
-def admin_token_headers(test_admin):
-    access_token = SecurityUtils.create_access_token(
-        data={"sub": test_admin.email},
-        expires_delta=timedelta(minutes=30)
-    )
+def admin_headers(test_admin: User) -> Dict[str, str]:
+    """Get admin authentication headers."""
+    access_token = create_test_token(test_admin.email)
     return {"Authorization": f"Bearer {access_token}"}
 
 @pytest.fixture
-def auth_headers(user_token_headers):
-    """Alias for user_token_headers for backward compatibility"""
-    return user_token_headers
+def audit_log(db: Session, test_user: User) -> AuditLogEntry:
+    """Create a test audit log entry."""
+    log = AuditLogEntry(
+        user_id=test_user.id,
+        action="test_action",
+        details="Test audit log entry",
+        ip_address="127.0.0.1"
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return log
 
 @pytest.fixture
-def async_client(client):
-    """Wrapper for sync client to be used in async tests"""
-    class AsyncClientWrapper:
-        def __init__(self, sync_client):
-            self._client = sync_client
-
-        async def get(self, *args, **kwargs):
-            return self._client.get(*args, **kwargs)
-
-        async def post(self, *args, **kwargs):
-            return self._client.post(*args, **kwargs)
-
-        async def put(self, *args, **kwargs):
-            return self._client.put(*args, **kwargs)
-
-        async def delete(self, *args, **kwargs):
-            return self._client.delete(*args, **kwargs)
-
-    return AsyncClientWrapper(client)
-
-# Override settings for testing
-@pytest.fixture(autouse=True)
-def override_settings():
-    app.dependency_overrides[Settings] = lambda: Settings(
-        TESTING=True,
-        DATABASE_URL="sqlite:///:memory:",
-        SECRET_KEY="test_secret_key",
-        BACKEND_CORS_ORIGINS=["http://test.com"],
-        TWO_FACTOR_AUTHENTICATION_ENABLED=False
-    )
+def clean_db(db: Session) -> None:
+    """Clean up the database after tests."""
     yield
-    app.dependency_overrides.clear()
+    db.query(Contact).delete()
+    db.query(Tag).delete()
+    db.query(AuditLogEntry).delete()
+    db.query(User).delete()
+    db.commit()

@@ -3,7 +3,8 @@ import smtplib
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from jinja2 import Environment, select_autoescape, PackageLoader
+from jinja2 import Environment, PackageLoader, select_autoescape
+import logging
 from typing import List, Optional
 
 from ..core.config import settings
@@ -44,7 +45,6 @@ class EmailService:
         if bcc:
             message['Bcc'] = ', '.join(bcc)
 
-        # Add HTML content
         html_part = MIMEText(html_content, 'html')
         message.attach(html_part)
         
@@ -59,20 +59,7 @@ class EmailService:
         cc: Optional[List[str]] = None,
         bcc: Optional[List[str]] = None
     ) -> bool:
-        """
-        Send an email using a template.
-        
-        Args:
-            to_email: Recipient email address
-            subject: Email subject
-            template_name: Name of the template file
-            template_data: Data to be passed to the template
-            cc: List of CC recipients
-            bcc: List of BCC recipients
-            
-        Returns:
-            bool: True if email was sent successfully, False otherwise
-        """
+        """Send an email using a template."""
         try:
             # Get template and render content
             template = self.env.get_template(f"{template_name}.html")
@@ -98,7 +85,11 @@ class EmailService:
                         server.login(self.smtp_user, self.smtp_password)
                     server.send_message(message)
             else:
-                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context) as server:
+                with smtplib.SMTP_SSL(
+                    self.smtp_server, 
+                    self.smtp_port, 
+                    context=context
+                ) as server:
                     if self.smtp_user and self.smtp_password:
                         server.login(self.smtp_user, self.smtp_password)
                     server.send_message(message)
@@ -106,18 +97,30 @@ class EmailService:
             return True
             
         except Exception as e:
-            # Log the error in production
-            print(f"Failed to send email: {str(e)}")
+            logging.error(f"Failed to send email: {str(e)}")
             return False
+
+    def send_welcome_email(self, to_email: str) -> bool:
+        """Send welcome email to new user."""
+        return self.send_email(
+            to_email=to_email,
+            subject="Welcome to Secure CMS",
+            template_name="welcome",
+            template_data={
+                "support_email": self.from_email,
+                "app_name": settings.SERVER_NAME
+            }
+        )
 
     def send_password_reset_email(self, to_email: str, reset_token: str) -> bool:
         """Send password reset email."""
+        reset_url = f"{settings.SERVER_HOST}/reset-password?token={reset_token}"
         return self.send_email(
             to_email=to_email,
             subject="Password Reset Request",
             template_name="password_reset",
             template_data={
-                "reset_url": f"{settings.SERVER_HOST}/reset-password?token={reset_token}",
+                "reset_url": reset_url,
                 "valid_hours": settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS
             }
         )
@@ -134,16 +137,23 @@ class EmailService:
             }
         )
 
-    def send_login_alert(self, to_email: str, ip_address: str, location: str) -> bool:
-        """Send login alert for suspicious activity."""
+    def send_security_alert(
+        self, 
+        to_email: str, 
+        ip_address: str, 
+        location: str, 
+        user_agent: str
+    ) -> bool:
+        """Send security alert for suspicious activity."""
         return self.send_email(
             to_email=to_email,
             subject="Security Alert: New Login Detected",
-            template_name="login_alert",
+            template_name="security_alert",
             template_data={
                 "ip_address": ip_address,
                 "location": location,
-                "timestamp": "now"  # You might want to pass actual timestamp
+                "user_agent": user_agent,
+                "settings_url": f"{settings.SERVER_HOST}/settings/security"
             }
         )
 
