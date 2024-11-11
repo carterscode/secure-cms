@@ -3,35 +3,17 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from app.core import initialize_core
-from app.core.config import Settings
-from app.db.session import Base, get_db
+from app.core.config import settings
+from app.db.session import get_db
 from app.main import app
+from app.models.models import Base
 
-# Initialize core components for testing
-initialize_core()
-
-# Override settings for testing
-def get_settings_override():
-    return Settings(
-        TESTING=True,
-        DEBUG=True,
-        POSTGRES_DB="test_db",
-        POSTGRES_USER="test_user",
-        POSTGRES_PASSWORD="test_pass",
-        POSTGRES_SERVER="localhost",
-        SECRET_KEY="test_secret_key",
-    )
-
-# Test database setup
-TEST_SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+# Test database
+SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
-    TEST_SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -42,7 +24,7 @@ def db_engine():
     Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
-def db_session(db_engine):
+def db(db_engine):
     connection = db_engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
@@ -53,35 +35,34 @@ def db_session(db_engine):
     transaction.rollback()
     connection.close()
 
-@pytest.fixture(scope="function")
-def client(db_session):
+@pytest.fixture(scope="module")
+def client(db):
     def override_get_db():
         try:
-            yield db_session
+            yield db
         finally:
-            db_session.close()
-    
+            db.close()
+
     app.dependency_overrides[get_db] = override_get_db
+    
     with TestClient(app) as test_client:
         yield test_client
+
     app.dependency_overrides.clear()
 
 @pytest.fixture
-def test_password() -> str:
-    return "Test1234!"
-
-@pytest.fixture
-def test_user(db_session, test_password):
-    from app.models.models import User
+def test_user(db):
     from app.core.security import SecurityUtils
+    from app.models.models import User
     
     user = User(
         email="test@example.com",
         username="testuser",
-        hashed_password=SecurityUtils.get_password_hash(test_password),
+        hashed_password=SecurityUtils.get_password_hash("testpassword123!"),
         is_active=True
     )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
     return user
