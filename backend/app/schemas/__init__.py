@@ -1,6 +1,4 @@
 # backend/app/schemas/__init__.py
-"""Schema package for the application."""
-
 from .auth import (
     Token,
     TokenData,
@@ -8,14 +6,13 @@ from .auth import (
     UserCreate,
     UserUpdate,
     UserLogin,
-    UserInDB,
     UserResponse,
-    UserListResponse,
+    UserInDB,
     TwoFactorResponse,
     TwoFactorVerify,
     PasswordChange,
     PasswordReset,
-    PasswordResetConfirm
+    PasswordResetConfirm,
 )
 
 from .contact import (
@@ -27,7 +24,7 @@ from .contact import (
     ContactImportPreview,
     TagBase,
     TagCreate,
-    Tag
+    Tag,
 )
 
 __all__ = [
@@ -38,9 +35,8 @@ __all__ = [
     "UserCreate",
     "UserUpdate",
     "UserLogin",
-    "UserInDB",
     "UserResponse",
-    "UserListResponse",
+    "UserInDB",
     "TwoFactorResponse",
     "TwoFactorVerify",
     "PasswordChange",
