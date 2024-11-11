@@ -34,7 +34,7 @@ async def add_security_headers(request: Request, call_next):
 # Include API router
 app.include_router(api_router, prefix="/api")
 
-# Initialize database on startup
+# Initialize database
 @app.on_event("startup")
 async def startup_event():
     init_db()
