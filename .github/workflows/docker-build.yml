@@ -11,6 +11,8 @@ env:
   AWS_REGION: us-west-2
   ECR_REPOSITORY_BACKEND: secrets.ECR_REPOSITORY_BACKEND
   ECR_REPOSITORY_FRONTEND: secrets.ECR_REPOSITORY_FRONTEND
+  PYTHON_VERSION: "3.11.10"
+  POETRY_VERSION: "1.8.2"
 
 jobs:
   test:
@@ -21,7 +23,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: ${{ env.PYTHON_VERSION }}
         cache: 'pip'
     
     - name: Install system dependencies
@@ -29,7 +31,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           build-essential \
-          libsnappy-dev \
+          libpq-dev \
           python3-dev \
           gcc \
           g++ \
@@ -38,12 +40,22 @@ jobs:
 
     - name: Install Poetry
       run: |
-        curl -sSL https://install.python-poetry.org | python3 -
+        curl -sSL https://install.python-poetry.org | POETRY_VERSION=${{ env.POETRY_VERSION }} python3 -
         poetry config virtualenvs.create true
         poetry config virtualenvs.in-project true
     
+    - name: Cache Poetry virtualenv
+      uses: actions/cache@v4
+      id: poetry-cache
+      with:
+        path: backend/.venv
+        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-poetry-
+    
     - name: Install dependencies
       working-directory: ./backend
+      if: steps.poetry-cache.outputs.cache-hit != 'true'
       run: poetry install --no-interaction --no-root
         
     - name: Run tests
