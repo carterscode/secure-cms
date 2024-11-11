@@ -8,7 +8,6 @@ from .core.security import SECURITY_HEADERS
 from .api import router as api_router
 from .db.session import init_db
 
-# Create FastAPI app
 app = FastAPI(
     title=settings.SERVER_NAME,
     description="Secure Contact Management System",
@@ -35,7 +34,7 @@ async def add_security_headers(request: Request, call_next):
 # Include API router
 app.include_router(api_router, prefix="/api")
 
-# Initialize database
+# Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
     init_db()

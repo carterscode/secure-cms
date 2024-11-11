@@ -1,5 +1,4 @@
 # backend/app/api/__init__.py
-"""API routes package."""
 from fastapi import APIRouter
 
 router = APIRouter()
@@ -14,5 +13,3 @@ router.include_router(auth_router, prefix="/auth", tags=["auth"])
 router.include_router(contacts_router, prefix="/contacts", tags=["contacts"])
 router.include_router(users_router, prefix="/users", tags=["users"])
 router.include_router(tags_router, prefix="/tags", tags=["tags"])
-
-__all__ = ["router"]

@@ -33,28 +33,23 @@ class UserCreate(UserBase):
             )
         return v
 
-class UserUpdate(BaseModel):
+class UserUpdate(UserBase):
     email: Optional[EmailStr] = None
     username: Optional[constr(min_length=3, max_length=50)] = None
     is_active: Optional[bool] = None
     is_admin: Optional[bool] = None
 
-    class Config:
-        from_attributes = True
-
-class UserLogin(BaseModel):
-    username: str
-    password: str
-
-class UserInDB(UserBase):
+class UserResponse(UserBase):
     id: int
-    hashed_password: str
     created_at: datetime
     updated_at: Optional[datetime] = None
 
-class TwoFactorSetup(BaseModel):
-    secret: str
-    uri: str
+class UserList(UserResponse):
+    pass
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
 
 class TwoFactorResponse(BaseModel):
     message: str
@@ -77,19 +72,8 @@ class PasswordChange(BaseModel):
             )
         return v
 
-class PasswordReset(BaseModel):
-    email: EmailStr
-
-class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
-
-    @validator('new_password')
-    def validate_new_password(cls, v):
-        from ..core.security import SecurityUtils
-        if not SecurityUtils.validate_password(v):
-            raise ValueError(
-                'Password must contain at least one uppercase letter, '
-                'one lowercase letter, one number, and one special character'
-            )
-        return v
+class UserInDB(UserBase):
+    id: int
+    hashed_password: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
