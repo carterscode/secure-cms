@@ -17,8 +17,7 @@ from ..schemas.auth import (
     UserLogin,
     TwoFactorResponse,
     TwoFactorVerify,
-    PasswordChange,
-    UserBase
+    PasswordChange
 )
 from ..services.email import email_service
 
@@ -29,10 +28,11 @@ async def register_user(
     user_data: UserCreate,
     db: Session = Depends(get_db)
 ) -> Any:
+    """Register a new user."""
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+            detail="Email already registered"
         )
 
     hashed_password = SecurityUtils.get_password_hash(user_data.password)
@@ -60,6 +60,7 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ) -> Any:
+    """OAuth2 compatible token login."""
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not SecurityUtils.verify_password(
         form_data.password, user.hashed_password
@@ -70,27 +71,26 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Generate and send 2FA token
     token = SecurityUtils.generate_2fa_token(user.email)
     email_service.send_2fa_code(user.email, token)
 
     return {"message": "2FA code sent to your email"}
 
 @router.post("/verify-2fa", response_model=Token)
-async def verify_2fa(
-    verify_data: TwoFactorVerify,
-    db: Session = Depends(get_db)
-) -> Any:
+async def verify_2fa(verify_data: TwoFactorVerify, db: Session = Depends(get_db)) -> Any:
+    """Verify 2FA token and issue access token."""
     user = db.query(User).filter(User.email == verify_data.email).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Invalid authentication credentials"
         )
 
     if not SecurityUtils.verify_2fa_token(verify_data.token, user.two_factor_secret):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid 2FA token",
+            detail="Invalid 2FA token"
         )
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -107,12 +107,13 @@ async def change_password(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ) -> Any:
+    """Change user password."""
     if not SecurityUtils.verify_password(
         password_data.current_password, current_user.hashed_password
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect password",
+            detail="Incorrect password"
         )
 
     current_user.hashed_password = SecurityUtils.get_password_hash(
@@ -121,9 +122,3 @@ async def change_password(
     db.commit()
 
     return {"message": "Password updated successfully"}
-
-@router.get("/me", response_model=UserBase)
-async def get_current_user_info(
-    current_user: User = Depends(get_current_active_user)
-) -> Any:
-    return current_user

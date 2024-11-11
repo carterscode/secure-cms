@@ -9,12 +9,13 @@ from .auth import (
     UserUpdate,
     UserLogin,
     UserInDB,
-    TwoFactorSetup,
+    UserResponse,
+    UserListResponse,
     TwoFactorResponse,
     TwoFactorVerify,
     PasswordChange,
     PasswordReset,
-    PasswordResetConfirm,
+    PasswordResetConfirm
 )
 
 from .contact import (
@@ -26,10 +27,11 @@ from .contact import (
     ContactImportPreview,
     TagBase,
     TagCreate,
-    Tag,
+    Tag
 )
 
 __all__ = [
+    # Auth schemas
     "Token",
     "TokenData",
     "UserBase",
@@ -37,12 +39,15 @@ __all__ = [
     "UserUpdate",
     "UserLogin",
     "UserInDB",
-    "TwoFactorSetup",
+    "UserResponse",
+    "UserListResponse",
     "TwoFactorResponse",
     "TwoFactorVerify",
     "PasswordChange",
     "PasswordReset",
     "PasswordResetConfirm",
+    
+    # Contact schemas
     "ContactBase",
     "ContactCreate",
     "ContactUpdate",
