@@ -9,17 +9,12 @@ from .auth import (
     UserUpdate,
     UserLogin,
     UserInDB,
-    UserResponse,
-    UserListResponse,
     TwoFactorSetup,
     TwoFactorResponse,
     TwoFactorVerify,
-    TwoFactorConfig,
     PasswordChange,
     PasswordReset,
     PasswordResetConfirm,
-    AuditLogEntry,
-    FailedLoginAttempt,
 )
 
 from .contact import (
@@ -35,7 +30,6 @@ from .contact import (
 )
 
 __all__ = [
-    # Auth schemas
     "Token",
     "TokenData",
     "UserBase",
@@ -43,19 +37,12 @@ __all__ = [
     "UserUpdate",
     "UserLogin",
     "UserInDB",
-    "UserResponse",
-    "UserListResponse",
     "TwoFactorSetup",
     "TwoFactorResponse",
     "TwoFactorVerify",
-    "TwoFactorConfig",
     "PasswordChange",
     "PasswordReset",
     "PasswordResetConfirm",
-    "AuditLogEntry",
-    "FailedLoginAttempt",
-    
-    # Contact schemas
     "ContactBase",
     "ContactCreate",
     "ContactUpdate",

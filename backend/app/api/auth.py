@@ -1,31 +1,38 @@
 # backend/app/api/auth.py
 from datetime import timedelta
+from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from ..core.security import SecurityUtils
 from ..core.config import settings
-from ..core.dependencies import get_current_active_user
+from ..core.security import SecurityUtils
+from ..core.dependencies import get_current_user, get_current_active_user
 from ..db.session import get_db
 from ..models.models import User
 from ..schemas.auth import (
     Token,
+    TokenData,
     UserCreate,
     UserLogin,
     TwoFactorResponse,
     TwoFactorVerify,
-    PasswordChange
+    PasswordChange,
+    UserBase
 )
+from ..services.email import email_service
 
 router = APIRouter()
 
 @router.post("/register", response_model=Token)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+async def register_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+) -> Any:
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Email already registered",
         )
 
     hashed_password = SecurityUtils.get_password_hash(user_data.password)
@@ -40,39 +47,83 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
 
-    access_token = SecurityUtils.create_access_token(data={"sub": db_user.email})
-    return Token(access_token=access_token, token_type="bearer")
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = SecurityUtils.create_access_token(
+        data={"sub": db_user.email},
+        expires_delta=access_token_expires
+    )
 
-@router.post("/login", response_model=Token)
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/login", response_model=TwoFactorResponse)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
-):
+) -> Any:
     user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not SecurityUtils.verify_password(form_data.password, user.hashed_password):
+    if not user or not SecurityUtils.verify_password(
+        form_data.password, user.hashed_password
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = SecurityUtils.create_access_token(data={"sub": user.email})
-    return Token(access_token=access_token, token_type="bearer")
+    token = SecurityUtils.generate_2fa_token(user.email)
+    email_service.send_2fa_code(user.email, token)
 
-@router.post("/password-change", response_model=dict)
+    return {"message": "2FA code sent to your email"}
+
+@router.post("/verify-2fa", response_model=Token)
+async def verify_2fa(
+    verify_data: TwoFactorVerify,
+    db: Session = Depends(get_db)
+) -> Any:
+    user = db.query(User).filter(User.email == verify_data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+
+    if not SecurityUtils.verify_2fa_token(verify_data.token, user.two_factor_secret):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid 2FA token",
+        )
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = SecurityUtils.create_access_token(
+        data={"sub": user.email},
+        expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/change-password")
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
-):
-    if not SecurityUtils.verify_password(password_data.current_password, current_user.hashed_password):
+) -> Any:
+    if not SecurityUtils.verify_password(
+        password_data.current_password, current_user.hashed_password
+    ):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect password"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password",
         )
 
-    hashed_password = SecurityUtils.get_password_hash(password_data.new_password)
-    current_user.hashed_password = hashed_password
+    current_user.hashed_password = SecurityUtils.get_password_hash(
+        password_data.new_password
+    )
     db.commit()
 
     return {"message": "Password updated successfully"}
+
+@router.get("/me", response_model=UserBase)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_active_user)
+) -> Any:
+    return current_user
