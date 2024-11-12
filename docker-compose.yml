@@ -3,16 +3,18 @@ version: '3.8'
 
 services:
   backend:
-    image: ${ECR_REGISTRY}/secure-cms-backend:${TAG:-latest}
-    environment:
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
-      CORS_ORIGINS: ${CORS_ORIGINS}
-      SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT}
-      SMTP_USER: ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
+    build:
+      context: ./backend
+      target: development
     volumes:
-      - sqlite_data:/app/data  # Mount volume for SQLite database
+      - ./backend:/app
+      - sqlite_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/secure_cms.db
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-http://localhost:3000,http://localhost:8000}
+    ports:
+      - "8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -20,25 +22,12 @@ services:
       retries: 3
 
   frontend:
-    image: ${ECR_REGISTRY}/secure-cms-frontend:${TAG:-latest}
+    build:
+      context: ./frontend
+    ports:
+      - "3000:3000"
     depends_on:
       - backend
-    ports:
-      - "443:443"
-    volumes:
-      - ./certs:/etc/nginx/certs:ro
-
-  redis:
-    image: redis:alpine
-    command: redis-server --requirepass ${REDIS_PASSWORD}
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 volumes:
-  sqlite_data:  # Volume for SQLite database persistence
-  redis_data:   # Volume for Redis data
+  sqlite_data:

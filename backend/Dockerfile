@@ -11,21 +11,17 @@ ENV PYTHONFAULTHANDLER=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
     POETRY_NO_INTERACTION=1 \
     PYSETUP_PATH="/opt/pysetup" \
-    VENV_PATH="/opt/pysetup/.venv"
+    VENV_PATH="/opt/pysetup/.venv" \
+    APP_DATA="/app/data"
 
 ENV PATH="$POETRY_HOME/bin:$VENV_PATH/bin:$PATH"
 
 # Build stage
 FROM python-base as builder-base
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    git \
-    libpq-dev \
-    libsnappy-dev \
-    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install poetry
@@ -33,8 +29,6 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 WORKDIR $PYSETUP_PATH
 COPY poetry.lock pyproject.toml ./
-
-# Install runtime dependencies
 RUN poetry install --no-dev --no-root
 
 # Development stage
@@ -45,26 +39,28 @@ WORKDIR $PYSETUP_PATH
 COPY . .
 RUN poetry install
 
+# Create data directory for SQLite
+RUN mkdir -p $APP_DATA && \
+    chmod 777 $APP_DATA
+
 CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # Production stage
 FROM python-base as production
 ENV FASTAPI_ENV=production
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    libsnappy1v5 \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder-base $VENV_PATH $VENV_PATH
+# Copy poetry installation and dependencies
+COPY --from=builder-base $POETRY_HOME $POETRY_HOME
 COPY --from=builder-base $PYSETUP_PATH $PYSETUP_PATH
 
 WORKDIR $PYSETUP_PATH
 COPY . .
 
-RUN useradd -r -s /bin/false app && \
-    chown -R app:app $PYSETUP_PATH
+# Create data directory for SQLite and set permissions
+RUN mkdir -p $APP_DATA && \
+    chmod 777 $APP_DATA && \
+    useradd -r -s /bin/false app && \
+    chown -R app:app $PYSETUP_PATH $APP_DATA
 
 USER app
 
