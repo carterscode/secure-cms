@@ -29,6 +29,7 @@ class User(Base):
     two_factor_secret = Column(String, nullable=True)
 
     contacts = relationship("Contact", back_populates="owner", cascade="all, delete-orphan")
+    audit_logs = relationship("AuditLogEntry", back_populates="user", cascade="all, delete-orphan")
 
 class Contact(Base):
     __table_args__ = {'extend_existing': True}
@@ -55,3 +56,16 @@ class Tag(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     contacts = relationship("Contact", secondary=contact_tags, back_populates="tags")
+
+class AuditLogEntry(Base):
+    __tablename__ = 'audit_logs'
+    __table_args__ = {'extend_existing': True}
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    action = Column(String, nullable=False)
+    details = Column(Text)
+    ip_address = Column(String)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="audit_logs")

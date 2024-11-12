@@ -1,15 +1,15 @@
 # backend/app/schemas/__init__.py
-from .user import User, UserCreate, UserUpdate
-from .token import Token, TokenPayload
 from .contact import ContactCreate, ContactUpdate, ContactResponse
+from .user import UserCreate, UserUpdate, User
+from .token import Token, TokenPayload
 
 __all__ = [
-    "User",
-    "UserCreate",
-    "UserUpdate",
-    "Token",
-    "TokenPayload",
     "ContactCreate",
     "ContactUpdate",
-    "ContactResponse"
+    "ContactResponse",
+    "UserCreate",
+    "UserUpdate",
+    "User",
+    "Token",
+    "TokenPayload"
 ]

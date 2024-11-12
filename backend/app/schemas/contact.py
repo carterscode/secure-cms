@@ -1,5 +1,5 @@
 # backend/app/schemas/contact.py
-from typing import Optional, List
+from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, EmailStr
 
