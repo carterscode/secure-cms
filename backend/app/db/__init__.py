@@ -1,16 +1,5 @@
 # backend/app/db/__init__.py
-"""Database module initialization."""
-# Import models first to ensure they are registered
-from ..models.models import Base, User, Contact, Tag, AuditLogEntry, contact_tags  # noqa
-from .session import get_db, SessionLocal, engine
+from .base import Base
+from .session import get_db, engine, SessionLocal
 
-__all__ = [
-    'Base',
-    'get_db',
-    'SessionLocal',
-    'engine',
-    'User',
-    'Contact',
-    'Tag',
-    'AuditLogEntry'
-]
+__all__ = ["Base", "get_db", "engine", "SessionLocal"]

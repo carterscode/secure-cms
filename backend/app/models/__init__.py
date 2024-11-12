@@ -1,6 +1,4 @@
 # backend/app/models/__init__.py
-"""Models module initialization."""
-from .models import User, Contact, Tag, AuditLogEntry
+from .models import User, Contact, Tag, contact_tags
 
-# This prevents the models from being registered twice
-__all__ = ["User", "Contact", "Tag", "AuditLogEntry"]
+__all__ = ["User", "Contact", "Tag", "contact_tags"]
