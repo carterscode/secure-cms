@@ -1,13 +1,15 @@
 # backend/app/schemas/__init__.py
-"""Schemas module initialization."""
-from .user import User, UserCreate, UserUpdate, UserInDB
+from .user import User, UserCreate, UserUpdate
 from .token import Token, TokenPayload
+from .contact import ContactCreate, ContactUpdate, ContactResponse
 
 __all__ = [
-    'User',
-    'UserCreate',
-    'UserUpdate',
-    'UserInDB',
-    'Token',
-    'TokenPayload'
+    "User",
+    "UserCreate",
+    "UserUpdate",
+    "Token",
+    "TokenPayload",
+    "ContactCreate",
+    "ContactUpdate",
+    "ContactResponse"
 ]
