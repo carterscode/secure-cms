@@ -15,27 +15,30 @@ os.environ.update({
     "BACKEND_CORS_ORIGINS": '["http://localhost:3000","http://localhost:8000"]'
 })
 
-# Import after environment is set
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from app.models.models import User, Contact, Tag, AuditLogEntry  # noqa
+
+def get_test_db_url() -> str:
+    """Get test database URL."""
+    return "sqlite:///:memory:"
 
 @pytest.fixture(scope="session")
-def engine():
+def test_engine():
+    """Create test engine."""
     engine = create_engine(
-        "sqlite:///:memory:",
+        get_test_db_url(),
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    # Create tables
-    Base.metadata.drop_all(bind=engine)  # Ensure clean state
     Base.metadata.create_all(bind=engine)
-    return engine
+    yield engine
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
-def db_session(engine: Generator) -> Generator:
-    connection = engine.connect()
+def db_session(test_engine: Generator) -> Generator:
+    """Create test database session."""
+    connection = test_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
 
@@ -47,6 +50,7 @@ def db_session(engine: Generator) -> Generator:
 
 @pytest.fixture(scope="function")
 def client(db_session: Generator) -> Generator:
+    """Create test client."""
     def override_get_db():
         try:
             yield db_session
@@ -58,3 +62,10 @@ def client(db_session: Generator) -> Generator:
         yield test_client
 
     app.dependency_overrides.clear()
+
+@pytest.fixture(autouse=True)
+def _init_db(test_engine):
+    """Ensure database is initialized for each test."""
+    Base.metadata.create_all(bind=test_engine)
+    yield
+    Base.metadata.drop_all(bind=test_engine)

@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .api import router as api_router
-from .db.session import init_db
+from .db.base import Base
+from .db.session import engine
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -24,7 +25,7 @@ app.add_middleware(
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Initialize database on startup
+# Create database tables on startup
 @app.on_event("startup")
 async def startup_event():
-    init_db()
+    Base.metadata.create_all(bind=engine)
