@@ -6,11 +6,14 @@ from typing import Generator
 import os
 
 from ..core.config import settings
+from .base import Base
 
 # Create database directory if it doesn't exist
-db_dir = os.path.dirname(settings.DATABASE_URL.replace('sqlite:///', ''))
-if db_dir and not os.path.exists(db_dir):
-    os.makedirs(db_dir)
+db_path = settings.DATABASE_URL.replace('sqlite:///', '')
+if db_path != ':memory:':
+    db_dir = os.path.dirname(db_path)
+    if db_dir and not os.path.exists(db_dir):
+        os.makedirs(db_dir)
 
 # Create SQLite engine with proper configuration
 engine = create_engine(
@@ -35,7 +38,6 @@ def init_db() -> None:
     """
     Initialize database tables.
     """
-    from ..models import Base
     Base.metadata.create_all(bind=engine)
 
 def close_db() -> None:

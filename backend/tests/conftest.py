@@ -15,9 +15,9 @@ os.environ.update({
     "BACKEND_CORS_ORIGINS": '["http://localhost:3000","http://localhost:8000"]'
 })
 
-from app.main import app
+from app.db.base import Base
 from app.db.session import get_db
-from app.models import Base
+from app.main import app
 
 @pytest.fixture(scope="session")
 def db_engine():
