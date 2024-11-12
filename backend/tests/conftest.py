@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-# Set environment variables before importing app
+# Set environment variables first
 os.environ.update({
     "TESTING": "true",
     "DATABASE_URL": "sqlite:///:memory:",
@@ -15,13 +15,16 @@ os.environ.update({
     "BACKEND_CORS_ORIGINS": '["http://localhost:3000","http://localhost:8000"]'
 })
 
+# Import Base before any models
 from app.db.base import Base
+
+# Then import other dependencies
 from app.db.session import get_db
 from app.main import app
-from app.models.models import User
+from app.models.models import User, Contact, Tag
 
 @pytest.fixture(scope="session")
-def test_engine():
+def engine():
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -34,13 +37,15 @@ def test_engine():
     
     event.listen(engine, 'connect', _enable_foreign_keys)
     
-    Base.metadata.create_all(bind=engine)
-    yield engine
+    # Create all tables
     Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    
+    return engine
 
 @pytest.fixture(scope="function")
-def db_session(test_engine: Generator) -> Generator[Session, None, None]:
-    connection = test_engine.connect()
+def db_session(engine) -> Generator[Session, None, None]:
+    connection = engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
 

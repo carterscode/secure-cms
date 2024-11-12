@@ -2,15 +2,15 @@
 from typing import Generator, Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt
 
 from .config import settings
 from .security import ALGORITHM
 from ..db.session import get_db
-from ..models.user import User
+from ..models.models import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
 def get_current_user(
     db: Session = Depends(get_db),

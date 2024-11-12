@@ -10,13 +10,12 @@ from ..db.base import Base
 contact_tags = Table(
     'contact_tags',
     Base.metadata,
-    Column('contact_id', Integer, ForeignKey('contacts.id', ondelete='CASCADE')),
-    Column('tag_id', Integer, ForeignKey('tags.id', ondelete='CASCADE')),
+    Column('contact_id', Integer, ForeignKey('contacts.id', ondelete='CASCADE'), primary_key=True),
+    Column('tag_id', Integer, ForeignKey('tags.id', ondelete='CASCADE'), primary_key=True),
     extend_existing=True
 )
 
 class User(Base):
-    __tablename__ = "users"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -32,7 +31,6 @@ class User(Base):
     contacts = relationship("Contact", back_populates="owner", cascade="all, delete-orphan")
 
 class Contact(Base):
-    __tablename__ = "contacts"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
@@ -50,7 +48,6 @@ class Contact(Base):
     tags = relationship("Tag", secondary=contact_tags, back_populates="contacts")
 
 class Tag(Base):
-    __tablename__ = "tags"
     __table_args__ = {'extend_existing': True}
 
     id = Column(Integer, primary_key=True, index=True)
