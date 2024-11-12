@@ -1,42 +1,49 @@
 # backend/tests/conftest.py
+import os
 import pytest
+from typing import Generator
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.config import settings
-from app.db.session import get_db
-from app.main import app
-from app.models.base import Base
+# Set test environment before imports
+os.environ.update({
+    "TESTING": "true",
+    "DATABASE_URL": "sqlite:///:memory:",
+    "SECRET_KEY": "test-secret-key",
+    "BACKEND_CORS_ORIGINS": '["http://localhost:3000","http://localhost:8000"]'
+})
 
-# Test database URL for SQLite in-memory database
-TEST_DATABASE_URL = "sqlite:///:memory:"
+from app.main import app
+from app.db.session import get_db
+from app.models import Base
 
 @pytest.fixture(scope="session")
-def engine():
-    """Create test database engine."""
+def db_engine():
     engine = create_engine(
-        TEST_DATABASE_URL,
+        "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    return engine
+    yield engine
+    Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
-def db_session(engine):
-    """Create test database session."""
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+def db_session(db_engine: Generator) -> Generator:
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
 
 @pytest.fixture(scope="function")
-def client(db_session):
-    """Create test client."""
+def client(db_session: Generator) -> Generator:
     def override_get_db():
         try:
             yield db_session
@@ -47,18 +54,4 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
 
-@pytest.fixture(scope="function")
-def test_user(db_session):
-    """Create test user."""
-    from app.models.user import User
-    from app.core.security import SecurityUtils
-    
-    user = User(
-        email="test@example.com",
-        username="test_user",
-        hashed_password=SecurityUtils.get_password_hash("test_password"),
-        is_active=True
-    )
-    db_session.add(user)
-    db_session.commit()
-    return user
+    app.dependency_overrides.clear()

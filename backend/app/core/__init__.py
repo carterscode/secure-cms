@@ -1,6 +1,5 @@
 # backend/app/core/__init__.py
-"""Core functionality package."""
+"""Core module initialization."""
 from .config import settings
-from .security import SecurityUtils, SECURITY_HEADERS
 
-__all__ = ["settings", "SecurityUtils", "SECURITY_HEADERS"]
+__all__ = ['settings']

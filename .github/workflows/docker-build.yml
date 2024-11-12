@@ -31,7 +31,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           build-essential \
-          libpq-dev \
           python3-dev \
           gcc \
           g++ \
@@ -44,25 +43,28 @@ jobs:
         poetry config virtualenvs.create true
         poetry config virtualenvs.in-project true
     
-    - name: Install dependencies
+    - name: Setup test environment
       working-directory: ./backend
       run: |
-        poetry install --no-interaction --no-root
+        echo 'DATABASE_URL="sqlite:///:memory:"' > .env
+        echo 'SECRET_KEY="test-secret-key"' >> .env
+        echo 'BACKEND_CORS_ORIGINS=["http://localhost:3000","http://localhost:8000"]' >> .env
+        echo 'TESTING=true' >> .env
     
+    - name: Install dependencies
+      working-directory: ./backend
+      run: poetry install --no-interaction --no-root
+        
     - name: Run tests
       working-directory: ./backend
       env:
-        TESTING: "True"
+        TESTING: "true"
         DATABASE_URL: "sqlite:///:memory:"
         SECRET_KEY: "test-secret-key"
+        BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://localhost:8000"]'
       run: poetry run pytest
 
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Run Trivy vulnerability scanner
+    - name: Run security scan
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'fs'
@@ -73,7 +75,7 @@ jobs:
         severity: 'CRITICAL,HIGH'
 
   build-and-push:
-    needs: [test, security-scan]
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -98,20 +100,4 @@ jobs:
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY_BACKEND:$IMAGE_TAG
     
-    - name: Build and push frontend image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev' }}
-      run: |
-        cd frontend
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG .
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY_FRONTEND:$IMAGE_TAG
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
-    steps:
-    - name: Deploy
-      run: |
-        echo "Deployment would go here - typically to ECS/EKS"
+    - name: Build and push fron
