@@ -10,13 +10,12 @@ from ..db.base import Base
 contact_tags = Table(
     'contact_tags',
     Base.metadata,
-    Column('contact_id', Integer, ForeignKey('contacts.id')),
-    Column('tag_id', Integer, ForeignKey('tags.id'))
+    Column('contact_id', Integer, ForeignKey('contacts.id', ondelete='CASCADE')),
+    Column('tag_id', Integer, ForeignKey('tags.id', ondelete='CASCADE')),
+    extend_existing=True
 )
 
 class User(Base):
-    __tablename__ = "users"
-
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True)
     username = Column(String, unique=True, index=True)
@@ -28,12 +27,12 @@ class User(Base):
     two_factor_secret = Column(String, nullable=True)
 
     # Relationships
-    contacts = relationship("Contact", back_populates="owner")
-    audit_logs = relationship("AuditLogEntry", back_populates="user")
+    contacts = relationship("Contact", back_populates="owner", cascade="all, delete-orphan")
+    audit_logs = relationship("AuditLogEntry", back_populates="user", cascade="all, delete-orphan")
+
+    __table_args__ = {'extend_existing': True}
 
 class Contact(Base):
-    __tablename__ = "contacts"
-
     id = Column(Integer, primary_key=True, index=True)
     first_name = Column(String)
     last_name = Column(String)
@@ -45,15 +44,15 @@ class Contact(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    owner_id = Column(Integer, ForeignKey("users.id"))
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete='CASCADE'))
 
     # Relationships
     owner = relationship("User", back_populates="contacts")
     tags = relationship("Tag", secondary=contact_tags, back_populates="contacts")
 
-class Tag(Base):
-    __tablename__ = "tags"
+    __table_args__ = {'extend_existing': True}
 
+class Tag(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -61,11 +60,11 @@ class Tag(Base):
     # Relationships
     contacts = relationship("Contact", secondary=contact_tags, back_populates="tags")
 
-class AuditLogEntry(Base):
-    __tablename__ = "audit_logs"
+    __table_args__ = {'extend_existing': True}
 
+class AuditLogEntry(Base):
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete='CASCADE'))
     action = Column(String)
     details = Column(Text)
     ip_address = Column(String, nullable=True)
@@ -73,3 +72,5 @@ class AuditLogEntry(Base):
 
     # Relationships
     user = relationship("User", back_populates="audit_logs")
+
+    __table_args__ = {'extend_existing': True}

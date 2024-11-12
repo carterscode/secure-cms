@@ -1,7 +1,14 @@
 # backend/app/db/base.py
+"""Base class for database models."""
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declared_attr
 
-Base = declarative_base()
+class CustomBase:
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
 
-# Import all models here for Alembic
-from ..models.models import User, Contact, Tag, AuditLogEntry  # noqa
+    # Common columns can be added here
+    id = None  # Will be defined in specific models
+
+Base = declarative_base(cls=CustomBase)
