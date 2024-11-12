@@ -7,7 +7,7 @@ class CustomBase:
     def __tablename__(cls):
         return cls.__name__.lower()
 
-Base = declarative_base(cls=CustomBase)
+    # Add common columns here if needed
+    id = None
 
-# Import all models to register them
-from ..models.models import User, Contact, Tag, AuditLogEntry  # noqa
+Base = declarative_base(cls=CustomBase)

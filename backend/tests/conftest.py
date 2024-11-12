@@ -3,8 +3,8 @@ import os
 import pytest
 from typing import Generator
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 # Set test environment before imports
@@ -16,29 +16,36 @@ os.environ.update({
 })
 
 from app.db.base import Base
+from app.models.models import User, Contact, Tag, AuditLogEntry, contact_tags  # noqa
 from app.db.session import get_db
 from app.main import app
 
-def get_test_db_url() -> str:
-    """Get test database URL."""
+def get_test_db_url():
     return "sqlite:///:memory:"
 
 @pytest.fixture(scope="session")
-def test_engine():
-    """Create test engine."""
+def engine():
     engine = create_engine(
         get_test_db_url(),
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    Base.metadata.create_all(bind=engine)
-    yield engine
+    
+    # Enable foreign keys for SQLite
+    def _enable_foreign_keys(connection, connection_record):
+        connection.execute('PRAGMA foreign_keys=ON')
+    
+    event.listen(engine, 'connect', _enable_foreign_keys)
+    
+    # Create all tables
     Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    
+    return engine
 
 @pytest.fixture(scope="function")
-def db_session(test_engine: Generator) -> Generator:
-    """Create test database session."""
-    connection = test_engine.connect()
+def db_session(engine) -> Generator[Session, None, None]:
+    connection = engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
 
@@ -49,23 +56,45 @@ def db_session(test_engine: Generator) -> Generator:
     connection.close()
 
 @pytest.fixture(scope="function")
-def client(db_session: Generator) -> Generator:
-    """Create test client."""
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = override_get_db
+def client(db_session: Session) -> Generator[TestClient, None, None]:
+    app.dependency_overrides[get_db] = lambda: db_session
+    
     with TestClient(app) as test_client:
         yield test_client
-
+    
     app.dependency_overrides.clear()
 
-@pytest.fixture(autouse=True)
-def _init_db(test_engine):
-    """Ensure database is initialized for each test."""
-    Base.metadata.create_all(bind=test_engine)
-    yield
-    Base.metadata.drop_all(bind=test_engine)
+@pytest.fixture(scope="function")
+def test_user(db_session: Session) -> User:
+    from app.core.security import get_password_hash
+    user = User(
+        email="test@example.com",
+        username="testuser",
+        hashed_password=get_password_hash("testpassword123!"),
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+@pytest.fixture(scope="function")
+def test_tag(db_session: Session) -> Tag:
+    tag = Tag(name="test-tag")
+    db_session.add(tag)
+    db_session.commit()
+    db_session.refresh(tag)
+    return tag
+
+@pytest.fixture(scope="function")
+def test_contact(db_session: Session, test_user: User) -> Contact:
+    contact = Contact(
+        first_name="Test",
+        last_name="Contact",
+        email="contact@example.com",
+        owner_id=test_user.id
+    )
+    db_session.add(contact)
+    db_session.commit()
+    db_session.refresh(contact)
+    return contact
